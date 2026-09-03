@@ -1,0 +1,68 @@
+# PDF 組裝清單
+#
+# 用法：  ./tools/build-pdf.sh [profile]
+# profile 未指定時用 deliverable。
+#
+# 語法：
+#   [profile:<名稱>]     開始一個版本
+#   title: / subtitle: / author:    封面資訊
+#   # 註解
+#   ## <文字>            插入分節標題頁
+#   <路徑>               收錄一個 .md（支援 glob，依檔名排序）
+#   ---                  強制分頁
+
+[profile:deliverable]
+title: SketchUp 多重控制圖 AI 渲染外掛
+subtitle: 設計規劃與可行性評估
+author: cbtzeng
+
+README.md
+---
+## 一、規格與評估設計
+docs/spec.md
+---
+## 二、系統架構
+docs/architecture.md
+---
+## 三、SketchUp Ruby API 可行性
+docs/sketchup-api-feasibility.md
+---
+## 四、範圍界定
+docs/scope.md
+---
+## 五、對本方案的反駁
+docs/critique.md
+---
+## 六、評估結果
+eval/report.md
+
+[profile:full]
+title: SketchUp 多重控制圖 AI 渲染外掛
+subtitle: 完整版（含決策紀錄）
+author: cbtzeng
+
+README.md
+---
+## 一、規格與評估設計
+docs/spec.md
+---
+## 二、系統架構
+docs/architecture.md
+---
+## 三、SketchUp Ruby API 可行性
+docs/sketchup-api-feasibility.md
+---
+## 四、範圍界定
+docs/scope.md
+---
+## 五、對本方案的反駁
+docs/critique.md
+---
+## 六、待決問題
+docs/open-questions.md
+---
+## 七、決策紀錄
+docs/journal/**/[0-9]*.md
+---
+## 八、評估結果
+eval/report.md
