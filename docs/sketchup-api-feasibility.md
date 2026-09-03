@@ -5,7 +5,21 @@
 - 🟡 **大致確定但細節待查**：API 存在，但關鍵參數/行為我不敢保證。
 - 🔴 **不確定 / 需實機驗證**：我不確定，或這是整個方案的風險點。**這幾項若不成立，方案要改。**
 
-本機沒有安裝 SketchUp，以下 🔴 與 🟡 項目必須由你在實機上跑一次驗證腳本確認。
+## 0. 已確認的環境（2026-09-03 於本機掃描）
+
+| 項目 | 值 | 來源 |
+|---|---|---|
+| SketchUp | **2026**（26.2 / build 26.2.242） | `/Applications/SketchUp 2026/SketchUp.app` |
+| 架構 | universal（x86_64 + arm64） | `lipo -archs` |
+| **Ruby** | **3.2.2** | `Contents/Frameworks/Ruby.framework/Versions/3.2.2` |
+| OpenSSL | 隨附（openssl 3.1.0 gem + stdlib） | Ruby.framework 內 |
+| Plugins 目錄 | `~/Library/Application Support/SketchUp 2026/SketchUp/Plugins` | |
+| macOS | 15.7.1 | |
+
+⚠️ **Ruby 3.2.2 而非 2.7**（我原本的假設錯了）。影響：可用較新語法；但**既有第三方 SketchUp 範例碼多半是 Ruby 2.x 時代寫的**，
+複製貼上時要注意 Ruby 3 的關鍵字參數分離、`Object#taint` 移除等破壞性變更。
+
+以下 🔴 與 🟡 項目仍必須由你在實機上跑一次驗證腳本確認。
 **我沒有臆造不存在的 API；凡是我記不清楚精確拼字或行為的，都標成待查，而不是猜一個寫上去。**
 
 ---
@@ -84,7 +98,7 @@
 | 5.1 | `Sketchup::Http::Request`（SU2017+）非同步、callback 在主執行緒 | 🟢 | |
 | 5.2 | 是否支援 binary body / multipart 上傳圖檔 | 🔴 | **需實測**。若不支援，改用「雲端發簽名 URL → PUT raw bytes」，或退回 `net/http` |
 | 5.3 | 可設 headers、可設逾時 | 🟡 | headers 確定可以；逾時設定我不確定 |
-| 5.4 | Ruby stdlib `net/http` + OpenSSL 在 SketchUp 內可用（HTTPS） | 🟡 | 現代版本一般可用，但歷史上有 OpenSSL 憑證問題，需實測 |
+| 5.4 | Ruby stdlib `net/http` + OpenSSL 在 SketchUp 內可用（HTTPS） | 🟡（風險已降低） | 已確認 app bundle 內隨附 OpenSSL 3.1.0 與 stdlib，Ruby 3.2.2。仍需實測憑證鏈是否能驗證成功，但可用性大幅提高 —— 這讓「Sketchup::Http 不支援 binary body」不再是致命問題 |
 | 5.5 | 企業 proxy / 憑證攔截環境下的行為 | 🔴 | 原型可先不管，但要記為已知限制 |
 
 ---
@@ -95,7 +109,7 @@
 |---|---|---|---|
 | 6.1 | RBZ 打包、`SketchupExtension` + `Sketchup.register_extension` | 🟢 | |
 | 6.2 | Extension Warehouse 上架與「僅載入已識別的擴充功能」載入政策需要數位簽章 | 🟢 | 原型階段可用手動安裝繞過，但要在報告中提到 |
-| 6.3 | 目標版本的 Ruby 版本（近年版本為 Ruby 2.7 系列） | 🟡 | 需以你機器上的 `RUBY_VERSION` 為準，決定可用語法 |
+| 6.3 | 目標版本的 Ruby 版本 | 🟢 **已確認：3.2.2** | SketchUp 2026 隨附。注意 Ruby 3 的破壞性變更會讓舊範例碼失效 |
 
 ---
 
@@ -103,7 +117,8 @@
 
 在寫任何功能程式碼之前，請先在 Ruby Console 跑完這七項並回填結果到 `docs/open-questions.md`：
 
-1. `RUBY_VERSION`、SketchUp 版本、作業系統。
+1. ~~`RUBY_VERSION`、SketchUp 版本、作業系統~~ —— **已由檔案系統確認（見第 0 節）**，
+   但仍請在 Ruby Console 跑一次 `RUBY_VERSION` 確認實際載入的版本與 framework 目錄一致。
 2. dump `model.rendering_options` 的**全部 key 與當前值**（貼回來，之後所有 key 以此為準）。
 3. `write_image` 在 viewport 為 16:9 時輸出 1024×1024，看畫面是被裁切、加邊、還是重新取景；再加上設定 `camera.aspect_ratio` 後重測。
 4. 階梯模型的 fog 標定（第 3.7 節），回報灰階↔距離對照表。

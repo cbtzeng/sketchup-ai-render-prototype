@@ -12,11 +12,11 @@
 
 ## A. 決策題
 
-### Q1. 目標 SketchUp 版本與作業系統？
-只鎖一個版本做原型（scope.md 已把相容矩陣列為不做）。
-- 建議：你手邊實際在用、且是 SketchUp 2021 以上的版本（HtmlDialog 與 Sketchup::Http 都需要較新版本）。
+### Q1. 目標 SketchUp 版本與作業系統？ ✅ 已自動確認
+掃描結果：**SketchUp 2026 (26.2.242)、Ruby 3.2.2、macOS 15.7.1、universal binary**。
+除非你要同時支援舊版或 Windows，這題不用回答，就鎖 2026 / macOS。
 
-**答：**
+**答：**（若需支援其他版本才填）
 
 ---
 
@@ -94,8 +94,9 @@ architecture.md 第 6 節的比較表目前是**我的預期，不是已驗證�
 > 這一節對應 `sketchup-api-feasibility.md` 第 7 節。
 > 我沒有 SketchUp 可測，這些我不會猜。答案回填後，🔴 項目才能降級。
 
-### Q9. 環境基本資料
-請貼上 `RUBY_VERSION`、SketchUp 版本號、OS。
+### Q9. 環境基本資料 ✅ 大致已確認
+已由檔案系統取得（見 Q1）。只剩一件事要你在 Ruby Console 確認：
+`RUBY_VERSION` 實際回傳值是否為 `3.2.2`。
 
 **答：**
 
@@ -176,8 +177,14 @@ viewport 維持一般比例（例如 16:9），呼叫 `write_image` 輸出 1024�
 
 ---
 
-### Q18. 你有裝過哪些競品 SketchUp AI 渲染外掛？
-critique.md 第 5 點建議實測競品送了什麼上去。如果你已經裝過，可以省下不少時間。
+### Q18. 【已升級為決策題】要不要把 SketchUp 內建的 su_diffusion 納入評估？
+掃描發現 **SketchUp 2026 已內建 Trimble 自家的 AI Render（`su_diffusion`，原生 C++/Qt 擴充）**，
+見 critique.md 第 5 點。這改變了競品版圖。
+- (a) 把它當成評估第四組 D，和 A/B/C 跑同一批 shots（建議，說服力最高）
+- (b) 只做定性比較（截圖 + UI 對照），不進統計
+- (c) 不處理
+
+另外：你用過它嗎？出圖品質與速度大概如何？
 
 **答：**
 

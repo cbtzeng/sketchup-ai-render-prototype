@@ -25,7 +25,9 @@ Architech AI 面試作業。**目前階段：純規劃，尚無實作程式碼�
 
 1. **fog 深度圖是否線性、是否可用** —— 未經驗證。見 feasibility 3.3–3.7。動工前必須先做標定實驗。
 2. **三個 pass 是否像素對齊** —— `write_image` 在寬高比不符時的行為未確認。對不齊則結果可能比純 img2img 更差。
-3. **edge/depth 這兩張控制圖，外部工具用單張截圖也做得出來** —— 見 critique.md 第 1 點。
+3. **SketchUp 2026 已內建 Trimble 自家的 AI Render（`su_diffusion`）**，且是原生 C++/Qt 擴充，
+   能碰到 Ruby API 拿不到的 depth buffer。差異化必須重新定位。見 critique.md 第 5 點。
+4. **edge/depth 這兩張控制圖，外部工具用單張截圖也做得出來** —— 見 critique.md 第 1 點。
    評估必須包含「外部 Canny」對照組，否則無法證明「必須跑在 SketchUp 內部」。
 
 ## 下一步

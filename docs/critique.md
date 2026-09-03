@@ -68,17 +68,40 @@
 
 ---
 
-## 5. 「viewport 截圖」這個假設可能低估了競品
+## 5. 【已被證實低估】最大的競品是 SketchUp 自己，而且它不受 Ruby API 限制
 
-你說競品「只送一張 viewport 截圖」。這需要查證。
-有些外掛可能已經在切樣式取多張圖，或在雲端跑預處理。
-**把競品講弱，是面試中最容易被反問倒的地方。**
+我原本要說的是「把競品講弱，是面試中最容易被反問倒的地方」。掃描本機後，這件事已經成立：
 
-**建議**：實際裝 2–3 個主流 SketchUp AI 渲染外掛，抓封包或看它上傳了什麼，
-在報告裡寫「我實測了 X 和 Y，它們送的是 ___」。
-有實測的一句話，勝過整段推測。這也順帶回答「你怎麼做競品研究」。
+**SketchUp 2026 內建了 `su_diffusion` —— Trimble 自家的 AI Render 功能**，
+位於 `~/Library/Application Support/SketchUp 2026/SketchUp/Plugins/su_diffusion/`。
 
----
+看它的組成，有兩個對你極為不利的事實：
+
+1. **它是原生 C++/Qt 擴充，不是 Ruby 外掛。**
+   目錄裡是 `SketchUpDiffusion.bundle` / `.so`（分 Qt 6.5.2 / 6.7.0 / 6.9.0 三版），
+   Ruby 部分只有 5 個加密的 `.rbe`（`susdRoot` / `susdAna` / `susdRootProxy` / `update_scene` / `su_loader`）。
+   **代表 Trimble 可以直接碰渲染引擎內部** —— 包括你拿不到的 depth buffer、G-buffer、材質 ID。
+   你用 fog 模擬深度是因為 Ruby API 沒有 z-buffer；**它不需要這個 workaround**。
+
+2. **它有 `.susig` 簽章、是 shipped extension，預設就在每個使用者的機器上。**
+   你的外掛要說服使用者裝一個第三方外掛，來做一個「開箱即有」的功能。
+
+**這對你的論點有兩個後果：**
+
+- **好消息**：它證明「AI 渲染要跑在 SketchUp 內部」這個方向 Trimble 也同意，你的前提站得住。
+- **壞消息**：「拿得到 3D 資訊」不再是你的差異化 —— 內建的那個拿得比你多。
+  你的差異化必須改成 **Trimble 沒有做、或做不好的事**：可控性（多 ControlNet 權重可調）、
+  可換底模、語意遮罩驅動的局部重繪、以及**可量測的保真度**。
+
+**行動建議（取代原本的「去裝競品」）**：
+1. 先跑一次內建的 su_diffusion，截圖存證，記錄它的 UI 給了哪些控制項、出圖品質、耗時。
+2. 抓封包看它上傳什麼（`.rbe` 加密、邏輯在原生碼，靜態分析成本高，攔 HTTPS 比較快）。
+3. **把 su_diffusion 當成評估的第四組 D**，和 A/B/C 一起跑同一批 36 shots。
+   「我把自己的方案和 SketchUp 內建的 AI Render 做了配對比較，數據在這裡」——
+   這一句話在面試裡的份量，超過任何功能 demo。
+
+順帶：同目錄還有 `su_assistant`（Trimble 的 AI 助理）。Trimble 在這條線上的投入不小，
+簡報時最好預期到「你和內建功能差在哪」這個問題。
 
 ## 6. 架構上的矛盾：BYO key 和雲端 key 保管不能同時成立
 
