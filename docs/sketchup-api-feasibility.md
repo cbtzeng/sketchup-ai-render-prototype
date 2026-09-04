@@ -53,7 +53,7 @@
 | 2.2 | 可列舉所有 key | 🟢 **已實測** | `RenderingOptions` 含 Enumerable，`each_pair` / `each_key` / `keys` / `to_h` 全部可用。共 70 個 key，完整 dump 見 `tools/spike/results/2026-09-04-env-dump.txt` |
 | 2.3 | 控制邊線/面/材質/霧的 key | 🟢 **已實測** | 上述 key 名全部存在，已寫入 `src/architech_render/capture/options_keys.rb`。**兩項修正**：(a) 我先前猜的 `FaceColorMode` **不存在**；(b) `DisplayShadows` 不在 rendering_options，在 `shadow_info`。另：深度暗示的 key 確實是 `DrawDepthQue`（Que 不是 Cue），先前對拼字的懷疑成立 |
 | 2.3b | `FogStartDist` / `FogEndDist` 的 `-1.0` | 🟢 **已實測解決** | 確為 auto 哨兵值，且**可寫入**。開啟 `DisplayFog` 不會自動把它換成計算值。寫入明確距離（英吋）後精確保留，寫回 `-1.0` 可恢復 auto |
-| 2.4 | `RenderMode` 的整數值對應 | 🟢 **已實測（目視確認）** | **0**=線框、**1**=隱藏線（面填**背景色**）、**2**=著色含貼圖、**5**=單色（面恆為**純白**）、**6**=同 2 但整體壓暗約 7%。**3/4/7 與 2 位元組完全相同**（在有貼圖的場景上仍相同）→ 視為 2 的別名。貼圖顯示由獨立的 `Texture` 布林控制，不歸 RenderMode 管。**edge pass 用 5 不是 1**，理由見 journal 004 |
+| 2.4 | `RenderMode` 的整數值對應 | 🟢 **已實測（目視確認）** | **0**=線框、**1**=隱藏線（面填**背景色**）、**2**=著色含貼圖、**5**=單色（面恆為**純白**）、**6**=同 2 但整體壓暗約 7%。**3/4/7 與 2 位元組完全相同**（在有貼圖的場景上仍相同）→ 視為 2 的別名。貼圖顯示由獨立的 `Texture` 布林控制，不歸 RenderMode 管。**edge pass 用 5 不是 1**，理由見 journal 004。**EdgeColorMode 亦已實測**：0/1/2 會套用 `ForegroundColor`，**3 會忽略它直接畫黑線**。1 產出的顏色數最少（5 種）最乾淨，edge pass 明確設為 1 |
 | 2.5 | 改 rendering_options 是否讓 model 變 dirty | 🟢 **已實測：不會** | 進場前 `modified? = false`，跑完 60+ 次 key 寫入與相機移動後仍為 `false`。**你在 Q13 的推測（會變 true）不成立** —— 這是好消息，代表擷取不會讓使用者被問「要儲存嗎」 |
 | 2.6 | 改 rendering_options 是否污染 undo stack | 🟢 **已實測：不會** | 手動測試：畫矩形→改設定→Ctrl+Z，撤銷掉的是**矩形**，顯示設定維持改過的狀態。包在 `start_operation`+`commit_operation` 內結果相同（SketchUp 不為無幾何變更的操作建立 undo 條目）。**推論**：rendering_options 完全在 model transaction 之外，因此 SketchUp 不會幫我們還原任何東西 —— `ensure` 還原是**唯一**防線，不是雙保險。另測 C 確認 `abort_operation` **不回滾**顯示設定（設 true 後 abort，讀回仍為 true）—— 它只回滾幾何。見 journal 005 |
 | 2.7 | snapshot → restore 能否完全還原 | 🟢 **已實測** | 腳本自我驗證「rendering_options 已完全還原」，逐 key 比對無差異，含 Color 與浮點值 |
@@ -74,7 +74,7 @@
 | 3.6 | 白面 + 黑霧能否得到單調可用的灰階深度 | 🟢 **已實測：可以，且可逆** | 不只單調，是精確線性。`options_keys.rb` 的 `grey_to_distance` 可無損還原公尺數 |
 | 3.7 | fog 深度的標定方法 | 🟢 **已完成** | 改用「相機退後法」：單一牆面 + 相機退到各距離，比原本蓋六面牆更無歧義。腳本 `tools/spike/probe_view.rb` E 節 |
 | 3.8 | 後備方案：`view.pickray(x, y)` + `model.raytest(ray)` 產生 depth map | 🟢 | 這兩個 API 我確定存在，回傳交點與路徑。**這是物理正確的真深度**，缺點是慢：128×128 就要 16,384 次 raytest，在主執行緒上會凍結 UI |
-| 3.9 | raytest 的實際速度 | ⚪ **不再需要** | fog 已證實可用（3.4），raytest 後備方案不啟用。若日後要交叉驗證 fog 的正確性可再測，非必要 |
+| 3.9 | `raytest` 的實際速度 | 🟢 **已實測：極快** | 8×8=64 條 1 ms、16×16=256 條 2 ms、**32×32=1024 條 7 ms**（目標 <200 ms）。已用於 depth pass 的 fog 範圍決定（24×24=576 條約 4 ms），修掉 journal 006 的兩個缺陷 |
 
 **結論**：fog 深度是有風險的假設，不是已知事實。
 **建議把 3.7 的標定實驗排在所有實作之前**。若 fog 不可用，方案退化為
@@ -118,7 +118,7 @@
 | # | 項目 | 信心 | 說明 |
 |---|---|---|---|
 | 5.1 | `Sketchup::Http::Request`（SU2017+）非同步、callback 在主執行緒 | 🟢 | |
-| 5.2 | 是否支援 binary body / multipart 上傳圖檔 | 🔴 | **需實測**。若不支援，改用「雲端發簽名 URL → PUT raw bytes」，或退回 `net/http` |
+| 5.2 | `Sketchup::Http` 能否送二進位 | 🟢 **已實測：完全無損** | 對本機 echo server PUT 一張 13029 bytes 的 PNG，`image/png` 與 `application/octet-stream` 兩種 Content-Type 都通過：byte 數相符、sha256 相符、**PNG magic number `89504e470d0a1a0a` 相符**。→ `HttpClient.backend = :sketchup` 定案，不需要改走 base64 |
 | 5.3 | 可設 headers、可設逾時 | 🟢 **已實測（有一項缺失）** | `Request` 的方法為 `[:body, :body=, :cancel, :headers, :headers=, :method=, :set_download_progress_callback, :set_upload_progress_callback, :start, :status, :url]`。headers 可設 ✓；**沒有任何逾時設定方法** ✗ → 逾時要靠 `UI.start_timer` 自行計時後呼叫 `cancel`。`Sketchup::Http` 常數含 PUT / POST 與 STATUS_* |
 | 5.4 | Ruby stdlib `net/http` | 🟡 **不穩定，不可依賴** | 同一台機器兩次執行得到相反結果：一次 `require 'net/http'` → `socket.so` LoadError，一次完全成功。原因未明，見 journal 008。**我先前根據單次觀察斷言「完全不可用」是錯的。**處置：`Sketchup::Http` 為主要路徑（兩次都可用）；`NetHttpBackend` 保留為「可能可用的後備」，真要用必須實際發一個請求驗證，不能只看 require 有沒有成功 |
 | 5.5 | 企業 proxy / 憑證攔截 | 🔴 未測 | 原型可先不管，記為已知限制 |

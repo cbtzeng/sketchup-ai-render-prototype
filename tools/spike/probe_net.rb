@@ -222,8 +222,8 @@ module ArchitechNetProbe
     puts "\n===== 完成 ====="
     puts "modified? = #{Sketchup.active_model.modified?}"
     puts "輸出目錄：#{NET_OUT}"
-    puts "\n註：net/http 這條路已確認不可用（socket.so 不存在），"
-    puts "    所以 Sketchup::Http 是唯一的網路選項。上面的結果決定它能不能用。"
+    puts "\n註：net/http 的可用性在同一台機器上出現過兩種相反結果（journal 008），"
+    puts "    所以 Sketchup::Http 是主要路徑；上面的結果決定它能不能送二進位。"
   end
 end
 

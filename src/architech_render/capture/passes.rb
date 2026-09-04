@@ -77,8 +77,10 @@ module ArchitechRender
           ro[K::EDGE_DISPLAY_MODE] = 1
           ro[K::DRAW_SILHOUETTES]  = true
           ro[K::DRAW_BACK_EDGES]   = false   # 要遮擋正確的線稿，不要透視背面
-          # 邊線強制為黑。注意：若 EDGE_COLOR_MODE 代表「依材質決定邊線顏色」，
-          # 這一行會無效而產出彩色線稿 —— 該 key 的語意尚未驗證，見 options_keys.rb 註記。
+          # 邊線強制為黑。EDGE_COLOR_MODE 必須一併設成 1（uniform）——
+          # 實測 mode 3 會忽略 FOREGROUND_COLOR 直接畫黑線，
+          # 若使用者的樣式剛好是 3，我們設的顏色就靜默失效了。
+          ro[K::EDGE_COLOR_MODE]   = K::EDGE_COLOR_MODE_UNIFORM
           ro[K::FOREGROUND_COLOR]  = Passes.color(BLACK)
           ro[K::JITTER_EDGES]      = false
           ro[K::EXTEND_LINES]      = false
@@ -94,23 +96,69 @@ module ArchitechRender
       module Depth
         def self.name = :depth
 
-        # 依模型包圍盒與相機位置決定霧的起訖，讓灰階動態範圍用滿。
-        # 取不到 bounds 時退回一個保守的固定範圍，並在 metadata 標明。
-        def self.fog_range(model, view)
-          eye = view.camera.eye
-          if model.respond_to?(:bounds)
-            bb = model.bounds
-            if bb && !bb.empty?
-              dists = (0..7).map { |i| eye.distance(bb.corner(i)) }
-              near  = dists.min
-              far   = dists.max
-              # 留一點邊界，避免最近/最遠面正好落在 0 或 255 被 clamp
-              pad = [(far - near) * 0.05, 1.0].max
-              return [[near - pad, 0.0].max, far + pad, :bounds]
+        # 決定霧的起訖。灰階只有 256 階，範圍取得太寬，主體就擠在很窄的一段裡。
+        #
+        # 優先用 raytest 取「畫面內實際看得到的東西」的深度範圍。
+        # 實測 32x32 = 1024 條射線只要 7 ms，成本可以忽略。
+        # 這修掉了 journal 006 記錄的兩個缺陷：
+        #   (1) model.bounds 是整個模型，不是畫面內的東西 ——
+        #       基地跨 200 m 但只拍 20 m 的中庭時，主體只佔 10% 灰階範圍
+        #   (2) eye.distance() 不分前後，相機背後的幾何也會被算進去
+        GRID = 24  # 576 條射線，約 4 ms
+
+        def self.sampled_range(model, view)
+          eye   = view.camera.eye
+          dists = []
+          GRID.times do |iy|
+            GRID.times do |ix|
+              ray = view.pickray((ix + 0.5) * view.vpwidth / GRID,
+                                 (iy + 0.5) * view.vpheight / GRID)
+              next unless ray
+              hit = model.raytest(ray)
+              next unless hit && hit[0]
+              dists << eye.distance(hit[0])
             end
           end
-          [0.0, 50.0 * K::INCHES_PER_METER, :fallback]
+
+          # 命中太少（大部分是天空）就不可靠，退回包圍盒。
+          return nil if dists.size < (GRID * GRID * 0.05)
+
+          dists.sort!
+          # 取 2% / 98% 分位數而非 min/max —— 單一根穿到遠處的射線
+          # 就足以把範圍撐爆，而那一個點對深度圖毫無貢獻。
+          lo = dists[(dists.size * 0.02).floor]
+          hi = dists[[(dists.size * 0.98).floor, dists.size - 1].min]
+          return nil if hi <= lo
+
+          pad = (hi - lo) * 0.05
+          [[lo - pad, 0.0].max, hi + pad]
         rescue StandardError
+          nil
+        end
+
+        def self.bounds_range(model, view)
+          eye = view.camera.eye
+          return nil unless model.respond_to?(:bounds)
+          bb = model.bounds
+          return nil if bb.nil? || bb.empty?
+          dists = (0..7).map { |i| eye.distance(bb.corner(i)) }
+          near = dists.min
+          far  = dists.max
+          pad  = [(far - near) * 0.05, 1.0].max
+          [[near - pad, 0.0].max, far + pad]
+        rescue StandardError
+          nil
+        end
+
+        # 三層依序：畫面內實測（最準）→ 整個模型的包圍盒 → 固定值。
+        # 回傳的第三個值會寫進 metadata，讓評估報告知道深度圖的品質來源。
+        def self.fog_range(model, view)
+          if (r = sampled_range(model, view))
+            return [r[0], r[1], :raytest]
+          end
+          if (r = bounds_range(model, view))
+            return [r[0], r[1], :bounds]
+          end
           [0.0, 50.0 * K::INCHES_PER_METER, :fallback]
         end
 

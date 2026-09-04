@@ -74,9 +74,14 @@ module ArchitechRender
       SHADOW_DARK          = "Dark"
       SHADOW_USE_SUN_ALL   = "UseSunForAllShading"
 
-      # ⚠️ EDGE_COLOR_MODE 的整數語意**尚未驗證**。dump 當前值為 1。
-      # 若它代表「依材質決定邊線顏色」，那麼設定 FOREGROUND_COLOR 會無效，
-      # edge pass 可能產出彩色線稿。列為下一輪尖刺項目，在驗證前不要依賴它。
+      # EDGE_COLOR_MODE 已實測（把 FOREGROUND_COLOR 設純紅，看哪些值讓線變紅）：
+      #   0 → 紅（生效），29 種顏色
+      #   1 → 紅（生效），**5 種顏色，最乾淨** ← edge pass 用這個
+      #   2 → 紅（生效），15 種顏色
+      #   3 → 黑（**不生效**，忽略 FOREGROUND_COLOR）
+      # 1 同時也是 SketchUp 的預設值，但仍要明確設定 ——
+      # 依賴使用者當下的設定，等於讓輸出隨他的樣式漂移。
+      EDGE_COLOR_MODE_UNIFORM = 1
 
       # dump 中「不存在」的 key —— 曾經被誤以為存在，記錄下來避免重蹈覆轍
       # FaceColorMode      → 不存在。面的顯示由 RenderMode + DisplayColorByLayer 決定。
