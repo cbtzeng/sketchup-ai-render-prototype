@@ -15,7 +15,7 @@ module ArchitechRender
       RENDER_MODE          = "RenderMode"            # dump 當前值 2
       EDGE_DISPLAY_MODE    = "EdgeDisplayMode"       # dump 當前值 1
       EDGE_TYPE            = "EdgeType"              # dump 當前值 0
-      EDGE_COLOR_MODE      = "EdgeColorMode"         # dump 當前值 1
+      EDGE_COLOR_MODE      = "EdgeColorMode"         # dump 當前值 1，整數語意未驗證（見下方 ⚠️）
       TEXTURE              = "Texture"               # true
       DRAW_SILHOUETTES     = "DrawSilhouettes"       # true
       SILHOUETTE_WIDTH     = "SilhouetteWidth"       # 2
@@ -50,7 +50,6 @@ module ArchitechRender
       AO_INTENSITY         = "AmbientOcclusionIntensity"
 
       FOREGROUND_COLOR     = "ForegroundColor"       # 邊線顏色
-      EDGE_COLOR_MODE      = "EdgeColorMode"         # dump 值 1，語意未驗證（見下方註記）
       DRAW_BACK_EDGES      = "DrawBackEdges"         # false
       DRAW_HIDDEN          = "DrawHidden"            # false
       DRAW_HIDDEN_GEOMETRY = "DrawHiddenGeometry"    # false
@@ -138,6 +137,19 @@ module ArchitechRender
       def self.distance_to_grey(dist_in, start_in, end_in)
         [[255.0 * (1.0 - (dist_in - start_in) / (end_in - start_in)), 0.0].max, 255.0].min
       end
+
+      # 載入期自我檢查：同一個 SketchUp key 被兩個常數指到，
+      # 代表有人重複加了同一行（Ruby 只會警告不會報錯，很容易漏掉）。
+      # 這個檔案是「唯一真實來源」，重複就失去意義了。
+      def self.audit!
+        pairs = constants.map { |c| [c, const_get(c)] }.select { |_, v| v.is_a?(String) }
+        dupes = pairs.group_by { |_, v| v }.select { |_, g| g.size > 1 }
+        return true if dupes.empty?
+        raise "options_keys.rb 有重複指向同一個 key 的常數：" +
+              dupes.map { |v, g| "#{v} ← #{g.map(&:first).join(', ')}" }.join('; ')
+      end
+
+      audit!
     end
   end
 end
