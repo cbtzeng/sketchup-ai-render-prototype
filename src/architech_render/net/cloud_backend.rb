@@ -28,13 +28,14 @@ module ArchitechRender
         ApiClient.request_upload_urls(pass_names: assets.keys.map(&:to_s)) do |err, res|
           next on_error.call(err) if err
 
-          urls = symbolize(res['urls'] || {})
-          upload(request, assets, urls, on_status, on_done, on_error)
+          urls  = symbolize(res['urls'] || {})
+          batch = res['upload_batch']
+          upload(request, assets, urls, batch, on_status, on_done, on_error)
         end
         nil
       end
 
-      def upload(request, assets, urls, on_status, on_done, on_error)
+      def upload(request, assets, urls, batch, on_status, on_done, on_error)
         progress = lambda do |name, done, total|
           on_status.call(state: 'uploading', label: "Uploading #{name} (#{done}/#{total})",
                          step: done, total: total)
@@ -44,18 +45,19 @@ module ArchitechRender
           next on_error.call(err) if err
 
           on_status.call(state: 'uploading', label: 'Creating job')
-          create(request, manifest, on_status, on_done, on_error)
+          create(request, manifest, batch, on_status, on_done, on_error)
         end
       end
 
-      def create(request, manifest, on_status, on_done, on_error)
+      def create(request, manifest, batch, on_status, on_done, on_error)
         ApiClient.create_job(
           scene: request[:scene] || current_scene_name,
           prompt: request[:prompt],
           preset: request[:preset],
           fidelity: request[:fidelity],
           manifest: manifest,
-          plan: request[:plan]
+          plan: request[:plan],
+          upload_batch: batch
         ) do |err, job|
           next on_error.call(err) if err
 

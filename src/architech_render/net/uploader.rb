@@ -7,10 +7,20 @@ module ArchitechRender
   module Net
     # 把控制圖上傳到雲端發的簽名 URL。
     #
-    # 這個模組唯一的非顯而易見之處：**上傳後必須比對 sha256**。
-    # 二進位 body 若被當成文字處理，伺服器一樣會回 200，PNG 卻已經壞了。
-    # 只看狀態碼的上傳流程會讓壞掉的控制圖一路送進 ControlNet，
-    # 而症狀是「結果莫名其妙很差」，幾乎查不出來。
+    # 核心保證：**壞掉的控制圖絕對不能一路送進 ControlNet。**
+    # 二進位 body 若被當文字處理，儲存服務一樣回 200，PNG 卻已經壞了，
+    # 而症狀是「結果莫名其妙很差」，事後幾乎查不出來。
+    #
+    # 校驗發生在哪裡（2026-09-04 修訂，見 journal 007）：
+    # 這裡**先本機算出 sha256**，隨 create_job 一起送上雲端；
+    # 雲端在建 job 時從儲存體重算並比對，不符就回 JOB-42 且不計費。
+    #
+    # 原本的設計是「要求 PUT 回應帶 sha256，沒帶就視為失敗」。
+    # 那條路走不通 —— Supabase Storage 的簽名 URL 上傳幾乎確定不回傳 checksum，
+    # 於是每一次上傳都會被判失敗。保證沒有變弱，只是移到做得到的地方。
+    #
+    # 若儲存體**有**回 sha256，這裡仍然會比對 —— 那是提早一步發現問題的機會，
+    # 沒有理由放棄。
     module Uploader
       # assets: { beauty: "/path/a.png", edge: "...", depth: "..." }
       # 依序上傳（不並行 —— 主執行緒單線，並行沒有好處只會更難除錯）。
@@ -61,15 +71,10 @@ module ArchitechRender
 
           remote_digest = extract_digest(res)
 
-          # 伺服器沒回 sha256 時不能當作通過。
-          # 「無法驗證」和「驗證通過」是兩回事，這裡不做樂觀假設。
-          if remote_digest.nil?
-            callback.call(
-              Errors::Base.new('伺服器沒有回傳 sha256，無法確認上傳完整性',
-                               code: 'NET-31', detail: { url: url }),
-              nil
-            )
-          elsif remote_digest != local_digest
+          # 儲存體有回 checksum 就當場比對（提早發現）；
+          # 沒回也不算失敗 —— 雲端會在 create_job 時重算並比對（JOB-42）。
+          # 這裡回傳的 local_digest 就是送上去給雲端比對的那個值。
+          if remote_digest && remote_digest != local_digest
             callback.call(Errors::IntegrityFailed.new(local_digest, remote_digest), nil)
           else
             callback.call(nil, local_digest)

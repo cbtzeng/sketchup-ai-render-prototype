@@ -153,6 +153,9 @@ usage_daily(user_id, day, jobs_count, cents_spent)               -- 成本護欄
 **schema 需要而原 2.3 節沒寫的欄位**（實作時補上，已寫入 migration）
 - `assets.upload_state` —— 原本只有 `sha256` 一欄，無法區分「還沒上傳」與
   「上傳了但雜湊不符」，但 `created → queued` 的條件正是「全部上傳完成且校驗通過」。
+- **`upload_batches` 表尚未存在**，需補 migration。少了它，
+  `POST /v1/jobs` 只能猜「該使用者最近一個未認領的批次」，
+  同帳號在兩台機器同時擷取會把別人的控制圖接到你的 job 上。
 - `assets.sha256_declared` —— 用戶端宣告值，與伺服器實算值分開存才驗得起來。
 - `jobs.retry_count`、`jobs.next_attempt_at` —— 轉移表要求「最多 2 次」與退避，
   但原 schema 沒有落地欄位。
@@ -174,6 +177,14 @@ usage_daily(user_id, day, jobs_count, cents_spent)               -- 成本護欄
 只涵蓋 `created / queued / running / retrying / succeeded`**。
 `failed / cancelled / expired` 的 job 不佔用 key，使用者用同樣參數重試不會撞 23505。
 （原文件只定義了 succeeded 的情形，沒定義失敗後重送 —— 那會直接撞 unique 約束。）
+
+**上傳完整性的校驗點**：Ruby 端算 sha256 並隨 `create_job` 送上；
+雲端在建 job 時**從儲存體讀回重算並比對**，不符回 `JOB-42` 且不計費。
+不要求 PUT 回應帶 checksum —— 簽名 URL 上傳普遍不回，那樣會讓每次上傳都失敗。
+詳見 journal 007。
+
+**額度釋放語意**：job 進入 failed / cancelled / expired 時**只釋放 cents，不釋放 jobs_count**。
+次數同時是防濫用閘門 —— 若失敗也退次數，反覆送必失敗的請求就能無限打 provider。
 
 **成本回填與 usage_daily 的關係**：`admit` 時以 `cost_estimate_cents` 預留額度；
 webhook 回來寫入 `cost_actual_cents` 後，用差額 `(actual - estimate)` 修正

@@ -29,15 +29,20 @@ module ArchitechRender
 
       # 建立 job。idempotency_key 由雲端依 controls_sha256 + params + user 計算，
       # 但 Ruby 端要把 controls_sha256 帶上去，否則雲端算不出來。
-      def self.create_job(scene:, prompt:, preset:, fidelity:, manifest:, plan:, &callback)
+      # upload_batch 必須從 request_upload_urls 的回應帶回來。
+      # 少了它，雲端只能猜「這個使用者最近一個未認領的批次」——
+      # 同一個帳號在兩台機器同時擷取就會取錯批次，把別人的控制圖接到你的 job 上。
+      def self.create_job(scene:, prompt:, preset:, fidelity:, manifest:, plan:,
+                          upload_batch: nil, &callback)
         payload = {
           scene: scene,
           prompt: prompt,
           preset: preset,
           fidelity: fidelity,
           controls: manifest.transform_values { |m| m[:sha256] },
-          output: { width: plan[:width], height: plan[:height] }
-        }
+          output: { width: plan[:width], height: plan[:height] },
+          upload_batch: upload_batch
+        }.compact
         post('/jobs', payload, &callback)
       end
 
