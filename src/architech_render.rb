@@ -13,5 +13,10 @@ module ArchitechRender
     architech_render/capture/alignment
     architech_render/capture/passes
     architech_render/capture/session
+    architech_render/net/errors
+    architech_render/net/http_client
+    architech_render/net/uploader
+    architech_render/net/api_client
+    architech_render/net/poller
   ].each { |f| require File.join(ROOT, "#{f}.rb") }
 end
