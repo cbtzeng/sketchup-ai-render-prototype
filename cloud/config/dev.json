@@ -1,0 +1,14 @@
+{
+  "_comment": "開發環境的非機密設定。金鑰一律不進這個檔案，只放 Vercel 環境變數。",
+  "supabase": {
+    "project_ref": "fkplaizbxefpxqxtewgh",
+    "url": "https://fkplaizbxefpxqxtewgh.supabase.co",
+    "_keys_note": "SUPABASE_SERVICE_ROLE_KEY 只存在 Vercel 環境變數，不進 repo"
+  },
+  "test_user": {
+    "id": "348abf8c-8001-4423-ad70-520426049fb3",
+    "email": "architech-test@example.com",
+    "_note": "RLS policy 綁 auth.uid()，測試資料需要這個 UUID 才寫得進去。UUID 不是機密。"
+  },
+  "migrations_applied": ["001_init", "002_upload_batches", "003_retry_index"]
+}
