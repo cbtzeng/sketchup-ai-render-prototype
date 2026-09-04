@@ -95,6 +95,18 @@
 
 ---
 
+## 4.7 【重要】SketchUp 的 Ruby 幾乎沒有原生擴充檔
+
+實測（2026-09-04）：整個 `lib/ruby` 目錄底下只有 `debug.bundle` 與 `rbs_extension.bundle`
+兩個原生擴充。`Init_digest` / `Init_socket` / `Init_openssl` / `Init_zlib` 等符號
+**確實存在於 Ruby 二進位中**（`nm` 可見），但顯然沒有註冊進 require 的 builtin 表，
+所以 `require 'digest'`、`require 'socket'` 一樣拋 `LoadError`。
+
+已確認**不可用**：`digest`、`socket`、以及所有依賴它們的東西（`net/http` 首當其衝）。
+
+這件事的影響範圍很廣，凡是要用 stdlib 的地方都要先用 `probe_stdlib.rb` 確認，
+**不要假設「Ruby 標準函式庫本來就有」**。
+
 ## 5. 網路
 
 | # | 項目 | 信心 | 說明 |
@@ -102,8 +114,8 @@
 | 5.1 | `Sketchup::Http::Request`（SU2017+）非同步、callback 在主執行緒 | 🟢 | |
 | 5.2 | 是否支援 binary body / multipart 上傳圖檔 | 🔴 | **需實測**。若不支援，改用「雲端發簽名 URL → PUT raw bytes」，或退回 `net/http` |
 | 5.3 | 可設 headers、可設逾時 | 🟢 **已實測（有一項缺失）** | `Request` 的方法為 `[:body, :body=, :cancel, :headers, :headers=, :method=, :set_download_progress_callback, :set_upload_progress_callback, :start, :status, :url]`。headers 可設 ✓；**沒有任何逾時設定方法** ✗ → 逾時要靠 `UI.start_timer` 自行計時後呼叫 `cancel`。`Sketchup::Http` 常數含 PUT / POST 與 STATUS_* |
-| 5.4 | Ruby stdlib `net/http` + OpenSSL 可用（HTTPS） | 🔴 **修正：不能直接用** | `require` 成功（OpenSSL gem 3.1.0 / library 3.4.1），但 **`OpenSSL::X509::DEFAULT_CERT_FILE` 指向打包機器路徑 `/Volumes/X10_Pro/conan1/...`，該檔在使用者機器上不存在**，預設憑證驗證會失敗。**解法已確認可行**：顯式傳 `ca_file`。來源有二 —— macOS 的 `/etc/ssl/cert.pem`（6263 行，存在），或 SketchUp 自帶的 `SketchUp.app/Contents/Resources/Tools/cacert.pem`（存在）。**後者較安全，不依賴使用者系統狀態**。我先前說「幾乎可以確定能用」是錯的 —— 能用，但不指定 CA 會靜默失敗在 TLS 握手 |
-| 5.5 | 企業 proxy / 憑證攔截環境下的行為 | 🔴 | 原型可先不管，但要記為已知限制 |
+| 5.4 | Ruby stdlib `net/http` | 🔴 **實測：完全不可用** | `require 'net/http'` → `net/protocol` → `require 'socket'` → **`LoadError: cannot load such file -- socket.so`**。SketchUp 的 Ruby 幾乎不附原生擴充檔（lib 內只有 debug.bundle 與 rbs_extension.bundle）。`Init_socket` 的符號雖在二進位中，但顯然沒有註冊進 builtin 表，require 一樣失敗。→ **`Sketchup::Http` 是唯一的網路選項**，`NetHttpBackend` 已無存在意義。先前「顯式傳 ca_file 就能用」的判斷不成立 —— 根本走不到 TLS 那一步 |
+| 5.5 | 企業 proxy / 憑證攔截 | ⚪ **不再適用** | 既然只能用 `Sketchup::Http`，proxy 行為由 SketchUp 自己處理，不是我們能控制的層級 |
 
 ---
 
