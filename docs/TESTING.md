@@ -4,6 +4,19 @@
 
 環境已確認：SketchUp 2026（26.2.242）、Ruby 3.2.2、macOS 15.7.1。
 
+## 先搞清楚：指令要貼在哪
+
+這份文件有兩種指令，貼錯地方會直接報錯。每個程式碼區塊上方都會標。
+
+| 標記 | 在哪裡 | 長怎樣 |
+|---|---|---|
+| **【終端機】** | macOS 的 **Terminal.app** | `./tools/...`、`python3 ...`、`git ...` |
+| **【Ruby Console】** | SketchUp 裡 **Extensions → Developer → Ruby Console** | `load '...'`、`Sketchup.active_model...` |
+
+判斷方式：**以 `load` 開頭的是 Ruby，其餘都是終端機。**
+把 shell 指令貼進 Ruby Console 會得到 `SyntaxError`；
+把 Ruby 貼進終端機會得到 `command not found`。兩種都不會弄壞任何東西。
+
 ---
 
 ## 階段 0 — 現在就能做，不需要任何帳號（約 20 分鐘）
@@ -13,7 +26,10 @@
 
 ### 0-1. 安裝外掛（一次性）
 
+**【終端機】**（不是 Ruby Console）
+
 ```bash
+cd /Users/benson/sketch-up-202609
 ./tools/install_dev.sh
 ```
 
@@ -26,7 +42,7 @@
 
 ### 0-2. 跑模組測試
 
-Ruby Console 在 **Extensions → Developer → Ruby Console**。
+**【Ruby Console】** —— 位置在 **Extensions → Developer → Ruby Console**。
 
 > **開一個新的空白模型再跑。** 這些腳本會暫時改動顯示設定（跑完自動還原）。
 
@@ -39,13 +55,15 @@ load '/Users/benson/sketch-up-202609/test/run_tests_staged.rb'
 
 ### 0-3. 網路尖刺（需要先開 echo server）
 
-另開一個終端機視窗：
+**【終端機】** —— 另開一個視窗，讓它一直跑著（不要關）：
 
 ```bash
 python3 /Users/benson/sketch-up-202609/tools/spike/echo_server.py
 ```
 
-只聽 `127.0.0.1`，測試資料不會離開你的機器。然後在 Ruby Console：
+只聽 `127.0.0.1`，測試資料不會離開你的機器。看到 `echo server 聽在 http://127.0.0.1:8787` 就是好了。
+
+**【Ruby Console】** —— 回到 SketchUp：
 
 ```ruby
 load '/Users/benson/sketch-up-202609/tools/spike/probe_net.rb'
@@ -63,6 +81,8 @@ load '/Users/benson/sketch-up-202609/tools/spike/probe_net.rb'
 [C] 節會對 `https://example.com` 發一次 HEAD 驗證憑證鏈，這是唯一的對外連線。
 
 ### 0-4. 面板酬載尖刺（單獨跑，會開視窗）
+
+**【Ruby Console】**
 
 ```ruby
 load '/Users/benson/sketch-up-202609/tools/spike/probe_dialog.rb'
@@ -88,8 +108,8 @@ load '/Users/benson/sketch-up-202609/tools/spike/probe_dialog.rb'
 
 ### 1-1. Supabase
 
-1. 建一個專案。
-2. 跑 `cloud/supabase/migrations/001_init.sql`。
+1. 建一個專案（在 supabase.com 的網頁介面）。
+2. 跑 `cloud/supabase/migrations/001_init.sql`（貼進 Supabase 的 SQL Editor）。
 3. 記下 project URL 與 service role key。
 
 > ⚠️ 已知缺口：`001_init.sql` **沒有 `upload_batches` 表**，需要補一個 migration。
