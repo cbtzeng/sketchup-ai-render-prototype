@@ -1,0 +1,75 @@
+{
+  "_comment": "評估的全部受控變因。跑批之間只有『控制圖』能變，其餘全部鎖死在這裡。這個檔必須跟著結果一起入版控，否則報告無法重現。",
+  "schema_version": 1,
+
+  "model": {
+    "base": "sdxl",
+    "_note": "open-questions Q16 未指定偏好，先鎖 SDXL：多 ControlNet 疊加在 SDXL 上較成熟，變因好控制。Flux 列為加分項。",
+    "endpoint": null,
+    "_endpoint_note": "🔴 fal.ai 的端點路徑尚未查證，不臆造。填入前 run.py 只能用 --provider dryrun。"
+  },
+
+  "sampling": {
+    "steps": 30,
+    "cfg": 6.0,
+    "sampler": "dpmpp_2m",
+    "denoise": 0.65,
+    "seed": 20260904
+  },
+
+  "output": { "width": 1024, "height": 1024 },
+
+  "prompt": {
+    "_note": "逐字固定。不做任何 LLM 改寫 —— 那會讓 A/B/C 的變因不只是控制圖，整個實驗設計就失效了（已列入 spec 的 Non-goals）。",
+    "exterior": "architectural photography of the building, natural daylight, clear sky, professional real estate photo, sharp focus",
+    "interior": "interior architectural photography, soft natural light from windows, professional real estate photo, sharp focus",
+    "negative": "blurry, distorted geometry, extra windows, warped walls, text, watermark, cartoon, illustration"
+  },
+
+  "conditions": {
+    "A": {
+      "label": "純 img2img",
+      "controls": [],
+      "_note": "baseline。只送 beauty 截圖走 img2img。"
+    },
+    "B": {
+      "label": "img2img + 外部 Canny",
+      "controls": ["canny_from_beauty"],
+      "canny": { "sigma": 1.4, "low": 0.1, "high": 0.2, "threshold_mode": "relative" },
+      "_note": "不可省略的對照組。Canny 在外部工具用一張截圖就做得出來 —— 少了 B，就無法證明『必須跑在 SketchUp 內部』。若 C 打不贏 B，照 Q8 的決定誠實寫進報告並改寫論點。"
+    },
+    "C1": {
+      "label": "多重控制（線性 z 深度）",
+      "controls": ["edge_hidden_line", "depth_linear_z"],
+      "weights": { "edge": 0.8, "depth": 0.5 }
+    },
+    "C2": {
+      "label": "多重控制（視差深度）",
+      "controls": ["edge_hidden_line", "depth_disparity"],
+      "weights": { "edge": 0.8, "depth": 0.5 },
+      "_note": "ControlNet 的 depth adapter 多以 MiDaS 類的視差（≈1/z）訓練，而 SketchUp 的 fog 給的是線性公制 z。哪一種正規化表現較好是實驗問題不是推導問題，所以 C1/C2 都跑，擇優並在報告呈現差異。見 journal 003。"
+    }
+  },
+
+  "dataset": {
+    "scenes": 6,
+    "cameras_per_scene": 2,
+    "seeds_per_shot": 1,
+    "_note": "6 場景 × 2 相機 = 12 shots，× 4 條件 = 48 張。時間盒 ≤2 天下的規模，12 shots 的 CI 會偏寬，報告中須明講而非隱藏。",
+    "scene_mix": [
+      "exterior/orthogonal-massing",
+      "exterior/curved-surface",
+      "exterior/large-glazing",
+      "interior/dense-openings",
+      "interior/slender-members",
+      "interior/complex-furniture"
+    ],
+    "_scene_mix_note": "刻意涵蓋會讓結構走鐘的情境。6 個都是方盒子的話純 img2img 也不會出錯，測不出差異。"
+  },
+
+  "budget": {
+    "max_usd_total": 10.0,
+    "max_usd_per_image": 0.08,
+    "_note": "48 張以每張 0.03–0.05 估約 US$1.5–2.5，含重跑抓 10 美元上限。超過即中止。"
+  }
+}

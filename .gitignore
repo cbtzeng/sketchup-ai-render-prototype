@@ -13,3 +13,5 @@ dist/
 # 原始逐字稿：體積大、雜訊高，不進版控
 docs/journal/_raw/
 cloud/node_modules/
+eval/captures/
+eval/out/
