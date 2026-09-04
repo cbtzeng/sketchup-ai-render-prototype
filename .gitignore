@@ -1,20 +1,40 @@
+# ---- 作業系統 ----
 .DS_Store
+
+# ---- 相依套件（可由 lockfile 還原，不進版控）----
 node_modules/
+cloud/node_modules/
+__pycache__/
+*.pyc
+
+# ---- Python 虛擬環境 ----
+# .venv-gen 是本機生成用的：torch 單一 dylib 就 368 MB，
+# 遠超 GitHub 的 100 MB 單檔上限。用 tools/download_models.py 重建。
+.venv/
+.venv-gen/
+
+# ---- 機密 ----
+# 金鑰只存在 Vercel 環境變數與 Supabase 後台，不進 repo 也不進對話。
 .env
 .env.local
-*.rbz
-eval/out/
-eval/raw/
-__pycache__/
-.venv/
+.env.*.local
 
-# PDF 產出，交件時才生成
+# ---- 產物：可重新產生，不進版控 ----
+# 外掛打包
+*.rbz
+# PDF（交件時才用 tools/build-pdf.sh 產生）
 dist/
-# 原始逐字稿：體積大、雜訊高，不進版控
-docs/journal/_raw/
-cloud/node_modules/
+# 評估的輸入與輸出
+#   captures/ 由 SketchUp 的 Capture::Session 產出
+#   out/      由 eval/run.py 產出，含生成圖與 manifest
 eval/captures/
 eval/out/
+eval/raw/
 
-# 本機生成用的 Python 環境（torch 單一 dylib 就 368MB，遠超 GitHub 的 100MB 上限）
-.venv-gen/
+# ---- 體積大且雜訊高 ----
+# 原始對話逐字稿。真正該留的是 docs/journal/ 底下的決策紀錄。
+docs/journal/_raw/
+
+# ---- 尖刺腳本的暫存輸出 ----
+# 這些寫在 Sketchup.temp_dir，不在 repo 內；
+# 值得保留的結果會手動複製到 tools/spike/results/ 並入版控。

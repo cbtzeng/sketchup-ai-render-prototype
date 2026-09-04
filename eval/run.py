@@ -181,9 +181,11 @@ def main(argv=None) -> int:
                 "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
     spent = 0.0
 
-    print(f"provider={provider.name}  shots={len(shots)}  conditions={conditions}")
+    # 背景執行時 Python 預設會緩衝 stdout，跑批時完全看不到進度。
+    # 這種批次工作最需要的就是「它還活著」的訊號，所以一律 flush。
+    print(f"provider={provider.name}  shots={len(shots)}  conditions={conditions}", flush=True)
     if provider.name == "local":
-        print("  第一張會慢很多（要載入模型），之後才是真實速度。")
+        print("  第一張會慢很多（要載入模型），之後才是真實速度。", flush=True)
     for shot in shots:
         for cond in conditions:
             spec = cfg["conditions"][cond]
@@ -225,7 +227,7 @@ def main(argv=None) -> int:
                 "capture_meta": shot["meta"],
             })
             print(f"  {shot['id']:34s} {cond:3s} {res.latency_ms:5d} ms  "
-                  f"${res.cost_usd or 0:.4f}")
+                  f"${res.cost_usd or 0:.4f}", flush=True)
 
     manifest["total_cost_usd"] = round(spent, 4)
     out_root.mkdir(parents=True, exist_ok=True)
