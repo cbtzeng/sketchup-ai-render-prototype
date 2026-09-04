@@ -1,0 +1,153 @@
+# Architech Render — Phase 0 環境探查
+# 產生時間: 2026-09-04 08:30:01 +0800
+
+RUBY_VERSION        = 3.2.2
+RUBY_PLATFORM       = arm64-darwin
+Sketchup.version    = 26.2.242
+version_number      = 2620000242
+is_64bit?           = true
+temp_dir            = /var/folders/b9/dkp1h96x7j9bt344w7cntrdc0000gn/T/com.sketchup.SketchUp.2026.benson
+model.path          = ""
+model.modified?     = false
+
+-- viewport
+vpwidth             = 1512.0
+vpheight            = 849.0
+aspect (w/h)        = 1.7809
+camera.aspect_ratio = 0.0
+camera.fov          = 35.0
+camera.perspective? = true
+
+======================================================================
+## model.rendering_options (Sketchup::RenderingOptions)
+======================================================================
+-- 可用方法（扣掉 Object 內建）
+[:[], :[]=, :add_observer, :all?, :any?, :attribute_dictionaries, :attribute_dictionary, :chain, :chunk, :chunk_while, :collect, :collect_concat, :compact, :count, :cycle, :delete_attribute, :deleted?, :detect, :drop, :drop_while, :each, :each_cons, :each_entry, :each_key, :each_pair, :each_slice, :each_with_index, :each_with_object, :entityID, :entries, :filter, :filter_map, :find, :find_all, :find_index, :first, :flat_map, :get_attribute, :grep, :grep_v, :group_by, :include?, :inject, :keys, :lazy, :length, :map, :max, :max_by, :member?, :min, :min_by, :minmax, :minmax_by, :model, :none?, :one?, :parent, :partition, :persistent_id, :reduce, :reject, :remove_observer, :reverse_each, :select, :set_attribute, :size, :slice_after, :slice_before, :slice_when, :sort, :sort_by, :sum, :take, :take_while, :tally, :to_a, :to_h, :to_set, :typename, :uniq, :valid?, :zip]
+-- key/value
+(用 each_pair)
+AmbientOcclusion	false
+AmbientOcclusionColor	#<Sketchup::Color:0x0000000361215a98>
+AmbientOcclusionColorEnabled	false
+AmbientOcclusionDistance	10.0
+AmbientOcclusionIntensity	0.0
+AmbientOcclusionMultiplier	1.0
+BackgroundColor	#<Sketchup::Color:0x0000000361215778>
+BandColor	#<Sketchup::Color:0x00000003612156b0>
+ConstructionColor	#<Sketchup::Color:0x0000000361215610>
+DefaultSectionFillStyleEnabled	false
+DepthQueWidth	4
+DisplayColorByLayer	false
+DisplayDims	true
+DisplayFog	false
+DisplayInstanceAxes	false
+DisplaySectionCuts	true
+DisplaySectionPlanes	false
+DisplaySketchAxes	true
+DisplayText	true
+DisplayWatermarks	true
+DrawBackEdges	false
+DrawDepthQue	false
+DrawGround	false
+DrawHidden	false
+DrawHiddenGeometry	false
+DrawHiddenObjects	false
+DrawHorizon	true
+DrawLineEnds	false
+DrawProfilesOnly	false
+DrawSilhouettes	true
+DrawUnderground	true
+EdgeColorMode	1
+EdgeDisplayMode	1
+EdgeType	0
+ExtendLines	false
+FaceBackColor	#<Sketchup::Color:0x0000000361214a08>
+FaceFrontColor	#<Sketchup::Color:0x0000000361214990>
+FogColor	#<Sketchup::Color:0x0000000361214328>
+FogEndDist	-1.0
+FogStartDist	-1.0
+FogUseBkColor	true
+ForegroundColor	#<Sketchup::Color:0x0000000361213720>
+GroundColor	#<Sketchup::Color:0x00000003612135e0>
+GroundTransparency	50
+HideConstructionGeometry	false
+HighlightColor	#<Sketchup::Color:0x0000000361213540>
+HorizonColor	#<Sketchup::Color:0x00000003612134c8>
+InactiveFade	0.25
+InactiveHidden	false
+InstanceFade	0.5
+InstanceHidden	false
+JitterEdges	false
+LineEndWidth	9
+LineExtension	3
+LockedColor	#<Sketchup::Color:0x0000000361213068>
+MaterialTransparency	true
+ModelTransparency	false
+RenderMode	2
+SectionActiveColor	#<Sketchup::Color:0x0000000361212f28>
+SectionCutDrawEdges	true
+SectionCutFilled	true
+SectionCutWidth	3
+SectionDefaultCutColor	#<Sketchup::Color:0x0000000361212e60>
+SectionDefaultFillColor	#<Sketchup::Color:0x0000000361212dc0>
+SectionInactiveColor	#<Sketchup::Color:0x0000000361212d70>
+ShowViewName	true
+SilhouetteWidth	2
+SkyColor	#<Sketchup::Color:0x0000000361212b18>
+Texture	true
+TransparencySort	0
+
+======================================================================
+## model.shadow_info (Sketchup::ShadowInfo)
+======================================================================
+-- 可用方法（扣掉 Object 內建）
+[:[], :[]=, :add_observer, :all?, :any?, :attribute_dictionaries, :attribute_dictionary, :chain, :chunk, :chunk_while, :collect, :collect_concat, :compact, :count, :cycle, :delete_attribute, :deleted?, :detect, :drop, :drop_while, :each, :each_cons, :each_entry, :each_key, :each_pair, :each_slice, :each_with_index, :each_with_object, :entityID, :entries, :filter, :filter_map, :find, :find_all, :find_index, :first, :flat_map, :get_attribute, :grep, :grep_v, :group_by, :include?, :inject, :keys, :lazy, :length, :map, :max, :max_by, :member?, :min, :min_by, :minmax, :minmax_by, :model, :none?, :one?, :parent, :partition, :persistent_id, :reduce, :reject, :remove_observer, :reverse_each, :select, :set_attribute, :size, :slice_after, :slice_before, :slice_when, :sort, :sort_by, :sum, :take, :take_while, :tally, :to_a, :to_h, :to_set, :typename, :uniq, :valid?, :zip]
+-- key/value
+(用 each_pair)
+City	"Boulder (CO)"
+Country	"USA"
+Dark	45
+DayOfYear	312
+DaylightSavings	false
+DisplayNorth	false
+DisplayOnAllFaces	true
+DisplayOnGroundPlane	true
+DisplayShadows	false
+EdgesCastShadows	false
+Latitude	40.018309
+Light	80
+Longitude	-105.242139
+NorthAngle	0.0
+ShadowTime	2026-11-08 21:30:00 +0800
+ShadowTime_time_t	1794144600
+SunDirection	Vector3d(-0.424315, -0.772773, 0.471995)
+SunRise	2026-11-08 14:43:14 +0800
+SunRise_time_t	1794120194
+SunSet	2026-11-09 00:45:57 +0800
+SunSet_time_t	1794156357
+TZOffset	-7.0
+UseSunForAllShading	false
+
+======================================================================
+## Sketchup::View 的 instance methods
+======================================================================
+[:add_observer, :animation=, :average_refresh_time, :camera, :camera=, :center, :corner, :device_height, :device_width, :draw, :draw2d, :draw_line, :draw_lines, :draw_points, :draw_polyline, :draw_text, :drawing_color=, :dynamic=, :field_of_view, :field_of_view=, :graphics_engine, :guess_target, :inference_locked?, :inputpoint, :invalidate, :last_refresh_time, :line_stipple=, :line_width=, :load_texture, :lock_inference, :model, :pick_helper, :pickray, :pixels_to_model, :refresh, :release_texture, :remove_observer, :screen_coords, :set_color_from_line, :show_frame, :text_bounds, :tooltip=, :vpheight, :vpwidth, :write_image, :zoom, :zoom_extents]
+
+======================================================================
+## Sketchup::Camera 的 instance methods
+======================================================================
+[:aspect_ratio, :aspect_ratio=, :center_2d, :description, :description=, :direction, :eye, :focal_length, :focal_length=, :fov, :fov=, :fov_is_height?, :height, :height=, :image_width, :image_width=, :is_2d?, :perspective=, :perspective?, :scale_2d, :serialize, :set, :target, :up, :xaxis, :yaxis, :zaxis]
+
+======================================================================
+## Sketchup::Http 探查（V8 前置）
+======================================================================
+Sketchup::Http::Request 存在
+[:body, :body=, :cancel, :headers, :headers=, :method=, :set_download_progress_callback, :set_upload_progress_callback, :start, :status, :url]
+Sketchup::Http 常數: [:DELETE, :GET, :HEAD, :OPTIONS, :PATCH, :POST, :PUT, :Request, :Response, :STATUS_CANCELED, :STATUS_FAILED, :STATUS_PENDING, :STATUS_SUCCESS, :STATUS_UNKNOWN]
+
+======================================================================
+## net/http + OpenSSL 可用性
+======================================================================
+require 成功
+OpenSSL::VERSION         = 3.1.0
+OPENSSL_LIBRARY_VERSION  = OpenSSL 3.4.1 11 Feb 2025
+預設 CA 檔存在?          = false (/Volumes/X10_Pro/conan1/.conan/data/openssl/3.4.1/sketchup/stable2/package/32c7187120a16de08cf98a20f1e13f41d19febdc/res/cert.pem)
