@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architech Render</title>
+<!--
+  純 HTML/CSS/JS，**不引入任何外部 CDN 或框架**。
+  外掛必須在完全離線的機器上載入，任何外部依賴都會變成空白面板。
+
+  這個檔案可以直接用瀏覽器打開檢查：
+      open src/architech_render/ui_assets/index.html
+  沒有 `window.sketchup` 時 app.js 會走 mock 資料（見 app.js 的 MockBridge）。
+-->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span>Architech Render</span>
+  </div>
+  <div class="topbar-right">
+    <span id="backend-badge" class="badge badge-warn" title="Backend status">checking…</span>
+    <button id="btn-diag" class="icon-btn" type="button" title="Diagnostics">i</button>
+  </div>
+</header>
+
+<main id="panel">
+
+  <!-- 錯誤橫幅：一定帶診斷碼，使用者回報時可直接對照 -->
+  <div id="error-banner" class="banner banner-error" hidden>
+    <div class="banner-head">
+      <span id="error-code" class="chip chip-error">UI-00</span>
+      <button id="error-dismiss" class="icon-btn" type="button" title="Dismiss">&times;</button>
+    </div>
+    <p id="error-message"></p>
+    <pre id="error-detail" class="detail" hidden></pre>
+  </div>
+
+  <!-- 1. Prompt -->
+  <section class="card">
+    <label class="field-label" for="prompt">Prompt</label>
+    <textarea id="prompt" rows="3" spellcheck="false"
+      placeholder="e.g. warm afternoon light, concrete and timber facade, people walking"></textarea>
+    <p class="hint">Describe materials, light and mood. Geometry comes from your model.</p>
+  </section>
+
+  <!-- 2. Style preset -->
+  <section class="card">
+    <span class="field-label">Style preset</span>
+    <div id="preset-group" class="segmented" role="radiogroup" aria-label="Style preset">
+      <button type="button" class="seg" role="radio" data-value="exterior" aria-checked="true">Exterior</button>
+      <button type="button" class="seg" role="radio" data-value="interior" aria-checked="false">Interior</button>
+      <button type="button" class="seg" role="radio" data-value="dusk" aria-checked="false">Dusk</button>
+    </div>
+  </section>
+
+  <!-- 3. Fidelity -->
+  <section class="card">
+    <div class="row-between">
+      <label class="field-label" for="fidelity">Fidelity</label>
+      <output id="fidelity-out" class="mono">0.60</output>
+    </div>
+    <input id="fidelity" type="range" min="0" max="1" step="0.05" value="0.6">
+    <div class="scale-ends">
+      <span>Creative</span>
+      <span>Faithful</span>
+    </div>
+    <p id="fidelity-hint" class="hint"></p>
+  </section>
+
+  <!-- 4. Resolution -->
+  <section class="card">
+    <div class="row-between">
+      <label class="field-label" for="long-edge">Resolution</label>
+      <span id="dims-out" class="mono">1024 &times; 1024</span>
+    </div>
+    <div class="row-gap">
+      <select id="long-edge" aria-label="Long edge in pixels">
+        <option value="512">512 px</option>
+        <option value="768">768 px</option>
+        <option value="1024" selected>1024 px</option>
+        <option value="1280">1280 px</option>
+        <option value="1536">1536 px (max)</option>
+      </select>
+      <div id="aspect-group" class="segmented compact" role="radiogroup" aria-label="Aspect ratio">
+        <button type="button" class="seg" role="radio" data-value="square" aria-checked="true">Square</button>
+        <button type="button" class="seg" role="radio" data-value="viewport" aria-checked="false">Viewport</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. 裁切框預覽：不畫的話使用者會問「我明明看得到那棵樹」 -->
+  <section class="card">
+    <div class="row-between">
+      <span class="field-label">Framing</span>
+      <span id="crop-badge" class="chip" hidden></span>
+    </div>
+    <div id="crop-figure" class="crop-figure"></div>
+    <p id="crop-note" class="hint"></p>
+  </section>
+
+  <!-- 6. Estimate -->
+  <section class="card estimate">
+    <div class="estimate-cell">
+      <span class="estimate-value mono" id="est-cost">&mdash;</span>
+      <span class="estimate-label">est. cost</span>
+    </div>
+    <div class="estimate-cell">
+      <span class="estimate-value mono" id="est-time">&mdash;</span>
+      <span class="estimate-label">est. time (p50)</span>
+    </div>
+    <p id="est-source" class="hint estimate-note"></p>
+  </section>
+
+  <!-- 7. Action -->
+  <section class="actions">
+    <button id="btn-render" class="btn btn-primary" type="button">Render</button>
+    <button id="btn-cancel" class="btn btn-ghost" type="button" hidden>Cancel</button>
+  </section>
+  <p class="hint flash-warning">
+    Capture briefly switches your display style three times &mdash; the SketchUp window
+    will flash. Your settings are restored automatically.
+  </p>
+
+  <!-- 8. Status -->
+  <section id="status-card" class="card" hidden>
+    <div class="row-between">
+      <span id="status-label" class="status-label">Idle</span>
+      <span id="status-elapsed" class="mono muted">0.0s</span>
+    </div>
+    <div class="track" role="progressbar" aria-label="Render progress">
+      <div id="status-fill" class="track-fill"></div>
+    </div>
+    <ol id="phase-list" class="phases">
+      <li data-phase="capturing">Capture</li>
+      <li data-phase="uploading">Upload</li>
+      <li data-phase="queued">Queue</li>
+      <li data-phase="running">Render</li>
+    </ol>
+    <p id="status-job" class="hint mono" hidden></p>
+  </section>
+
+  <!-- 9. Result / compare -->
+  <section id="result-card" class="card" hidden>
+    <div class="row-between">
+      <span class="field-label">Result vs. capture</span>
+      <button id="btn-reveal" class="link-btn" type="button">Show files</button>
+    </div>
+    <div id="compare" class="compare">
+      <img id="img-before" class="compare-img" alt="Beauty capture">
+      <div id="compare-clip" class="compare-clip">
+        <img id="img-after" class="compare-img" alt="Rendered result">
+      </div>
+      <div id="compare-handle" class="compare-handle" aria-hidden="true"></div>
+    </div>
+    <input id="compare-range" type="range" min="0" max="100" value="50"
+           aria-label="Compare original and result">
+    <div class="compare-legend">
+      <span>Capture</span>
+      <span>Result</span>
+    </div>
+  </section>
+
+  <!-- 10. Diagnostics -->
+  <section id="diag-card" class="card" hidden>
+    <div class="row-between">
+      <span class="field-label">Diagnostics</span>
+      <button id="btn-diag-close" class="link-btn" type="button">Hide</button>
+    </div>
+    <dl id="diag-list" class="diag"></dl>
+    <div class="row-gap">
+      <label class="checkline">
+        <input id="toggle-base64" type="checkbox">
+        <span>Use base64 preview transport</span>
+      </label>
+    </div>
+    <p class="hint">
+      Previews load from local file paths by default. The base64 fallback exists because
+      the HtmlDialog payload ceiling has not been measured on real hardware yet.
+    </p>
+    <pre id="diag-log" class="detail"></pre>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
