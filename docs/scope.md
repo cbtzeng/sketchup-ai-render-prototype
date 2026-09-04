@@ -13,6 +13,7 @@
 | 金鑰模型 | 平台 key + 固定測試額度 |
 | 雲端 | Vercel |
 | 底模 | SDXL + 多 ControlNet（無偏好，先鎖一組） |
+| Provider | **fal.ai 一家**。Replicate 改為文件調查並註明未實測 |
 | 評估規模 | 6 場景 × 2 相機 = 12 shots，A/B/C 各 1 seed = 36 張 |
 | 語意遮罩 | 加分項，文件論述，不進 MVP |
 | su_diffusion 對照 | follow-up issue，第一版不做 |
@@ -52,7 +53,7 @@
 
 ### 1.2 雲端層
 - 四個端點：`/uploads`、`/jobs` (POST/GET)、`/hooks/:provider`。
-- **只接一家 provider**（依 Q6 的實測結果選定），adapter 介面留好但不實作第二家。
+- **只接 fal.ai**，adapter 介面留好但不實作第二家。
 - 狀態機五個狀態即可：`created / queued / running / succeeded / failed`。
 - 成本護欄先做三條：解析度上限、每日上限、冪等去重。
 
@@ -77,7 +78,7 @@
 |---|---|---|
 | ★★★ | **材質/物件語意遮罩 pass** —— 用 SketchUp 的 material 與 group/component 資訊產生分色遮罩，餵給 segmentation 類控制或做區域重繪 | 這是**外部工具完全複製不了**的能力，比 edge/depth 更能證明「跑在 SketchUp 內部」的價值。見 critique.md 第 2 點 |
 | ★★★ | 人類偏好 A/B 評估（spec H2 守門指標） | 防止「結構準但變醜」的假勝利 |
-| ★★ | 兩家 provider 都接，實測 p50/p95 與成本並寫進報告 | 直接回答面試題的「比較成本與延遲」 |
+| ★★ | 補接 Replicate，實測 p50/p95 與成本並寫進報告 | 直接回答面試題的「比較成本與延遲」。MVP 只接 fal.ai |
 | ★★ | 消失點角度誤差指標 | 建築客戶最有感的指標 |
 | ★★ | 局部重繪（框選區域 + inpaint，控制圖同步裁切） | 真實工作流常見需求 |
 | ★ | 補跑多 seed 或擴到 12 場景 | 提高統計穩健度，12 shots 的 CI 偏寬 |
