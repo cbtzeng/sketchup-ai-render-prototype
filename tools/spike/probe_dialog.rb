@@ -50,6 +50,7 @@ module ArchitechDialogProbe
     )
     @dialog.set_html(HTML)
 
+    @reported = false
     @queue    = SIZES.flat_map { |n| [[:rb2js, n], [:js2rb, n]] }
     @results  = []
     @t0       = nil
@@ -118,6 +119,9 @@ module ArchitechDialogProbe
   end
 
   def self.report(reason)
+    # 正常跑完會關視窗，關視窗又觸發 set_on_closed → 報告印兩次。
+    return if @reported
+    @reported = true
     stop_watchdog
     @queue = []
     puts "\n===== HtmlDialog 酬載測試結束（#{reason}）====="

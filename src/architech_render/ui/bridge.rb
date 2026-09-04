@@ -40,9 +40,19 @@ module ArchitechRender
       #   a. 預覽圖預設走本機檔案路徑（`file://`），根本不進橋接（見 route image.data）。
       #   b. 單次 execute_script 超過 MAX_SCRIPT_CHARS 就自動改走分塊傳輸。
       #   c. 分塊也超過 MAX_TOTAL_CHARS 就直接回 UI-07，不試、不猜、不截斷。
-      MAX_SCRIPT_CHARS = 262_144   # 單次 execute_script 的保守上限（256K 字元）
-      CHUNK_CHARS      =  65_536   # 分塊大小（64K 字元），刻意遠低於任何合理上限
-      MAX_TOTAL_CHARS  = 8_388_608 # 就算分塊也不送超過這個量（8M 字元）
+      # 2026-09-05 實測（tools/spike/probe_dialog.rb，SketchUp 2026 / macOS）：
+      # 1K → 8M 字元逐級測試，**雙向全部完整無截斷**。
+      #   1M 字元  rb2js 16 ms / js2rb 11 ms
+      #   2M 字元  rb2js 31 ms / js2rb 19 ms
+      #   8M 字元  rb2js 127 ms / js2rb 76 ms
+      # 1024² 的 PNG 轉 base64 約 1–2 MB，遠在上限之內。
+      #
+      # 上限訂在實測值的一半而不是實測值本身：這是單一機器單一版本的觀察，
+      # 留一倍餘裕給其他機器與未來版本。分塊機制保留 ——
+      # 它已經有測試，成本是零，而萬一某台機器真的比較差，它就是那道保險。
+      MAX_SCRIPT_CHARS = 2_000_000 # 單次 execute_script 上限（實測 8M 可用，取 1/4）
+      CHUNK_CHARS      =   500_000 # 分塊大小（實測 500K 僅需 8 ms）
+      MAX_TOTAL_CHARS  = 4_000_000 # 就算分塊也不送超過這個量（實測 8M 可用，取一半）
 
       # 診斷碼。使用者回報問題時直接對照這張表，所以碼一旦發佈就不要改用途。
       CODES = {
@@ -537,7 +547,7 @@ module ArchitechRender
                        max_script_chars: MAX_SCRIPT_CHARS,
                        chunk_chars: CHUNK_CHARS,
                        max_total_chars: MAX_TOTAL_CHARS,
-                       verified: false } }
+                       verified: true } }
       end
 
       route 'dialog.close' do |_params, ctx|
