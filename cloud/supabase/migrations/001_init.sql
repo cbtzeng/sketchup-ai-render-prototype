@@ -78,19 +78,18 @@ create table public.jobs (
 );
 
 -- 【硬性要求 2】冪等去重的唯一索引。
--- idempotency_key = sha256(controls_sha256 + params_json + user_id)，
--- user_id 已經是雜湊材料的一部分，所以全域 unique 即等於「每使用者唯一」。
-create unique index jobs_idempotency_key_uidx on public.jobs (idempotency_key);
-
--- 🔴 待決：使用者重送一個**已 failed / cancelled / expired** 的相同請求時，
--- 上面這個全域 unique index 會直接擋住 INSERT。architecture.md 第 3 節只寫了
--- 「同一個 key 若已有 succeeded 的 job，直接回傳舊結果」，沒有定義失敗後重送。
--- 兩個候選解（尚未決定，故不改動上面的索引）：
---   (a) 改成 partial unique index，讓終態失敗的 row 不佔用 key：
---         create unique index jobs_idempotency_key_uidx on public.jobs (idempotency_key)
---           where status not in ('failed', 'cancelled', 'expired');
---   (b) 把 attempt 序號加進 idempotency_key 的雜湊材料。
--- 在決定之前，API handler 必須自行處理 23505 unique violation。
+-- idempotency_key = sha256(controls_sha256 + "\n" + canonical_json(params) + "\n" + user_id)
+-- user_id 已是雜湊材料的一部分，所以全域 unique 即等於「每使用者唯一」。
+--
+-- 2026-09-05 決定（architecture.md 第 3 節）：採 **partial unique index**。
+-- 終態失敗的 row 不佔用 key，使用者用同樣參數重試不會撞 23505。
+--
+-- 為什麼不是把 attempt 序號加進雜湊材料（候選解 b）：
+-- 那會讓「同一個請求」在重試後產生不同的 key，等於放棄去重 ——
+-- 使用者連按兩次 Render 又會被收兩次錢，而那正是這個索引存在的理由。
+create unique index jobs_idempotency_key_uidx
+  on public.jobs (idempotency_key)
+  where status not in ('failed', 'cancelled', 'expired');
 
 create index jobs_user_status_idx on public.jobs (user_id, status);
 create index jobs_provider_job_id_idx on public.jobs (provider, provider_job_id)

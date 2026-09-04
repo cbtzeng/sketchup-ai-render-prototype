@@ -17,9 +17,11 @@ done
 
 docker cp "$HERE/_auth_stub.sql"            "$CONTAINER:/tmp/00.sql" >/dev/null
 docker cp "$HERE/../migrations/001_init.sql" "$CONTAINER:/tmp/01.sql" >/dev/null
+docker cp "$HERE/../migrations/002_upload_batches.sql" "$CONTAINER:/tmp/01b.sql" >/dev/null
 docker cp "$HERE/001_init.verify.sql"        "$CONTAINER:/tmp/02.sql" >/dev/null
 
 docker exec "$CONTAINER" psql -U postgres -d verify -v ON_ERROR_STOP=1 -q -f /tmp/00.sql
 docker exec "$CONTAINER" psql -U postgres -d verify -v ON_ERROR_STOP=1 -q -f /tmp/01.sql
-echo "migration 套用成功"
+docker exec "$CONTAINER" psql -U postgres -d verify -v ON_ERROR_STOP=1 -q -f /tmp/01b.sql
+echo "migration 套用成功（001 + 002）"
 docker exec "$CONTAINER" psql -U postgres -d verify -f /tmp/02.sql
