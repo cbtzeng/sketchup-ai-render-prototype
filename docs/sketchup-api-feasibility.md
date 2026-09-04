@@ -55,7 +55,7 @@
 | 2.3b | `FogStartDist` / `FogEndDist` 的 `-1.0` | 🟢 **已實測解決** | 確為 auto 哨兵值，且**可寫入**。開啟 `DisplayFog` 不會自動把它換成計算值。寫入明確距離（英吋）後精確保留，寫回 `-1.0` 可恢復 auto |
 | 2.4 | `RenderMode` 的整數值對應 | 🟢 **已實測（目視確認）** | **0**=線框、**1**=隱藏線（面填**背景色**）、**2**=著色含貼圖、**5**=單色（面恆為**純白**）、**6**=同 2 但整體壓暗約 7%。**3/4/7 與 2 位元組完全相同**（在有貼圖的場景上仍相同）→ 視為 2 的別名。貼圖顯示由獨立的 `Texture` 布林控制，不歸 RenderMode 管。**edge pass 用 5 不是 1**，理由見 journal 004 |
 | 2.5 | 改 rendering_options 是否讓 model 變 dirty | 🟢 **已實測：不會** | 進場前 `modified? = false`，跑完 60+ 次 key 寫入與相機移動後仍為 `false`。**你在 Q13 的推測（會變 true）不成立** —— 這是好消息，代表擷取不會讓使用者被問「要儲存嗎」 |
-| 2.6 | 改 rendering_options 是否污染 undo stack | 🟢 **已實測：不會** | 手動測試：畫矩形→改設定→Ctrl+Z，撤銷掉的是**矩形**，顯示設定維持改過的狀態。包在 `start_operation`+`commit_operation` 內結果相同（SketchUp 不為無幾何變更的操作建立 undo 條目）。**推論**：rendering_options 完全在 model transaction 之外，因此 SketchUp 不會幫我們還原任何東西 —— `ensure` 還原是**唯一**防線，不是雙保險。見 journal 005 |
+| 2.6 | 改 rendering_options 是否污染 undo stack | 🟢 **已實測：不會** | 手動測試：畫矩形→改設定→Ctrl+Z，撤銷掉的是**矩形**，顯示設定維持改過的狀態。包在 `start_operation`+`commit_operation` 內結果相同（SketchUp 不為無幾何變更的操作建立 undo 條目）。**推論**：rendering_options 完全在 model transaction 之外，因此 SketchUp 不會幫我們還原任何東西 —— `ensure` 還原是**唯一**防線，不是雙保險。另測 C 確認 `abort_operation` **不回滾**顯示設定（設 true 後 abort，讀回仍為 true）—— 它只回滾幾何。見 journal 005 |
 | 2.7 | snapshot → restore 能否完全還原 | 🟢 **已實測** | 腳本自我驗證「rendering_options 已完全還原」，逐 key 比對無差異，含 Color 與浮點值 |
 | 2.8 | `model.shadow_info`（陰影開關、太陽方向）可存取與還原 | 🟢 | |
 | 2.9 | `model.styles.add_style(path, select)` 可載入 .style 檔 | 🟡 | 我記得存在。但用「打包好的 .style 檔」切換 vs「直接改 rendering_options」哪個更快更乾淨，需實測比較。用 .style 的優點是還原乾淨、行為可預期 |

@@ -20,7 +20,7 @@ status: decided
 |---|---|---|---|
 | A | 裸改 `DisplayFog` / `Texture` | **矩形**，顯示設定維持改過的狀態 | Undo 變灰、出現 Redo Rectangle |
 | B | 包在 `start_operation` + `commit_operation` | **矩形** | Undo 變灰、出現 Redo Rectangle |
-| C | `start_operation` + `abort_operation` | — | 貼上時字串被截斷造成 SyntaxError，**整段未執行，結果無效** |
+| C | `start_operation` + `abort_operation` | — | **`DisplayFog` 仍為 `true`** → abort **不回滾**顯示設定 |
 
 ## 決定
 
@@ -48,9 +48,10 @@ rendering_options 完全在 model 的變更追蹤之外。
 ## 被否決的選項為什麼不行
 
 - **用 `start_operation` 包住顯示設定變更**：測試 B 證明沒有效果，只是多一層沒用的包裝。
-- **依賴 `abort_operation` 回滾顯示設定**：測試 C 無效，但依測試 A 的結論推論，
-  rendering_options 既然不在 transaction 內，abort 就不可能回滾它。
-  **仍需一次乾淨的 C 測試確認**，見未解。
+- **依賴 `abort_operation` 回滾顯示設定**：**測試 C 已確認不行**。
+  在 `start_operation` 內把 `DisplayFog` 設為 true 後 `abort_operation`，
+  讀回仍是 `true`。rendering_options 不在 transaction 內，abort 對它無效。
+  這與測試 A 的結論一致。
 
 ## 對程式碼的硬性要求
 
@@ -61,6 +62,10 @@ rendering_options 完全在 model 的變更追蹤之外。
 
 ## 未解
 
-測試 C（`abort_operation` 是否回滾顯示設定）尚未取得有效結果。
-影響有限：無論答案為何，`ensure` 還原都要保留。
-但為了文件正確性，仍應補測。
+無。三組測試皆已取得有效結果，可行性清單 2.6 由 🔴 結案為 🟢。
+
+## 後記：probe 腳本的 abort_operation 是給幾何用的，不是給設定用的
+
+先前的 `probe_view.rb` / `probe_rendermode.rb` 同時用了 `abort_operation`
+與自寫的 `ensure` 還原。測試 C 證明前者只回滾臨時幾何，
+**顯示設定完全是靠後者救回來的**。兩者職責不同，都要留。

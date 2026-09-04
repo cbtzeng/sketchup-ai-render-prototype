@@ -9,9 +9,14 @@
 # 改為顯式呼叫 Minitest.run。
 
 require 'minitest'
+require 'stringio'
 
-ROOT = File.expand_path('..', File.dirname(__FILE__))
-load File.join(ROOT, 'src', 'architech_render.rb')
+# 用 load 而非 require，讓修改後重跑能生效（require 只會執行一次）。
+# 逐檔載入而不是走 architech_render.rb，因為那支用的是 require。
+AR_ROOT = File.expand_path('..', File.dirname(__FILE__)) unless defined?(AR_ROOT)
+%w[
+  options_keys view_state alignment passes session
+].each { |f| load File.join(AR_ROOT, 'src', 'architech_render', 'capture', "#{f}.rb") }
 
 module ArchitechTestHelper
   def model = Sketchup.active_model
@@ -88,16 +93,16 @@ end
 
 class AlignmentTest < Minitest::Test
   include ArchitechTestHelper
-  A = ArchitechRender::Capture::Alignment
+  def a = ArchitechRender::Capture::Alignment
 
   def test_square_plan_is_square
-    p = A.plan(view, long_edge: 1024, aspect: :square)
+    p = a.plan(view, long_edge: 1024, aspect: :square)
     assert_equal 1024, p.width
     assert_equal 1024, p.height
   end
 
   def test_viewport_plan_matches_viewport_aspect
-    p = A.plan(view, long_edge: 1024, aspect: :viewport)
+    p = a.plan(view, long_edge: 1024, aspect: :viewport)
     assert_in_delta p.viewport_aspect, p.output_aspect, 0.01
     # 沿用 viewport 長寬比時不應有裁切
     assert_in_delta 1.0, p.visible_width_ratio, 0.01
@@ -107,18 +112,18 @@ class AlignmentTest < Minitest::Test
   # 對應 journal 002：1512x849 出 1024x1024 會水平裁掉約 44%
   def test_square_output_from_wide_viewport_is_cropped
     skip '此測試需要非正方形的 viewport' if (view.vpwidth.to_f / view.vpheight - 1.0).abs < 0.05
-    p = A.plan(view, long_edge: 1024, aspect: :square)
+    p = a.plan(view, long_edge: 1024, aspect: :square)
     assert p.cropped?, '寬 viewport 出正方形應判定為裁切'
     assert_in_delta 1.0 / p.viewport_aspect, p.visible_width_ratio, 0.001
   end
 
   def test_rejects_oversize
-    assert_raises(ArgumentError) { A.plan(view, long_edge: 2048) }
+    assert_raises(ArgumentError) { a.plan(view, long_edge: 2048) }
   end
 
   def test_assert_consistent_raises_on_mismatch
-    assert A.assert_consistent!(a: [1024, 1024], b: [1024, 1024])
-    assert_raises(RuntimeError) { A.assert_consistent!(a: [1024, 1024], b: [1024, 768]) }
+    assert a.assert_consistent!(a: [1024, 1024], b: [1024, 1024])
+    assert_raises(RuntimeError) { a.assert_consistent!(a: [1024, 1024], b: [1024, 768]) }
   end
 end
 
@@ -126,13 +131,13 @@ end
 
 class SessionTest < Minitest::Test
   include ArchitechTestHelper
-  A = ArchitechRender::Capture::Alignment
-  S = ArchitechRender::Capture::Session
+  def a = ArchitechRender::Capture::Alignment
+  def s = ArchitechRender::Capture::Session
 
   def test_run_produces_three_aligned_images_and_restores
     before = ro.to_h
-    plan   = A.plan(view, long_edge: 512, aspect: :square)
-    result = S.new(model, plan: plan).run(tmp_dir)
+    plan   = a.plan(view, long_edge: 512, aspect: :square)
+    result = s.new(model, plan: plan).run(tmp_dir)
 
     assert_equal %i[beauty edge depth].sort, result.paths.keys.sort
     result.paths.each do |name, path|
@@ -151,8 +156,8 @@ class SessionTest < Minitest::Test
   end
 
   def test_depth_metadata_allows_grey_to_metre_roundtrip
-    plan   = A.plan(view, long_edge: 256, aspect: :square)
-    result = S.new(model, plan: plan).run(tmp_dir)
+    plan   = a.plan(view, long_edge: 256, aspect: :square)
+    result = s.new(model, plan: plan).run(tmp_dir)
     m      = result.metadata[:passes][:depth]
 
     # 灰階 255 應對應 fog start，灰階 0 應對應 fog end
@@ -169,5 +174,17 @@ puts "\n=== Architech Render 測試 ==="
 puts "模型：#{Sketchup.active_model.path.empty? ? '(未存檔的模型)' : Sketchup.active_model.path}"
 puts "viewport：#{Sketchup.active_model.active_view.vpwidth.to_i}x#{Sketchup.active_model.active_view.vpheight.to_i}"
 puts "modified? 執行前 = #{Sketchup.active_model.modified?}"
-Minitest.run(['--verbose'])
+
+# SketchUp 的 $stdout 是 Sketchup::Console，它的 puts 是 private method，
+# minitest 的 reporter 直接呼叫 io.puts 會炸。所以把輸出導進 StringIO，
+# 跑完再用 Kernel#puts 一次印出。
+buffer     = StringIO.new
+old_stdout = $stdout
+begin
+  $stdout = buffer
+  Minitest.run(['--verbose'])
+ensure
+  $stdout = old_stdout
+end
+puts buffer.string
 puts "modified? 執行後 = #{Sketchup.active_model.modified?}"
