@@ -1,0 +1,66 @@
+# Architech Render — Task 0.2/0.3 探查報告
+# 2026-09-04 08:41:23 +0800
+# model.modified? 進場前 = false
+
+## A. viewport vs device 尺寸（Retina 倍率）
+vpwidth / vpheight         = 1512.0 x 849.0
+device_width / device_height = 3024 x 1698
+倍率 (device/vp)             = 2.0 x 2.0
+camera.aspect_ratio         = 0.0
+camera.fov                  = 35.0
+camera.fov_is_height?       = true
+camera.image_width          = 0.0
+view.graphics_engine        = :graphics_engine_2024
+
+## B. write_image 寬高比行為
+（三張圖請目視比對：被裁切 / 上下加邊 / 看到更多東西）
+B1_native_1512x849	write_image=true	bytes=38014
+B2_square_ar0	write_image=true	bytes=30604
+B3_square_ar1	write_image=true	bytes=30604
+B4_wide_ar0	write_image=true	bytes=22921
+
+## C. RenderMode 數值對應
+目前值 = 2
+RenderMode=0	寫檔=true	bytes=10484	（讀回=0）
+RenderMode=1	寫檔=true	bytes=10381	（讀回=1）
+RenderMode=2	寫檔=true	bytes=12934	（讀回=2）
+RenderMode=3	寫檔=true	bytes=12934	（讀回=3）
+RenderMode=4	寫檔=true	bytes=12934	（讀回=4）
+RenderMode=5	寫檔=true	bytes=10333	（讀回=5）
+RenderMode=6	寫檔=true	bytes=13000	（讀回=6）
+RenderMode=7	寫檔=true	bytes=12934	（讀回=7）
+
+## D. fog 的 -1.0 是什麼意思
+初始  Start=-1.0  End=-1.0  UseBk=true  Display=false
+開霧後 Start=-1.0  End=-1.0   ← 若數值自己變了，-1.0 就是 auto 哨兵
+設 0 / 60m 後讀回  Start=0.0  End=2362.206   ← 若讀回值 ≠ 寫入值，單位不是英吋
+改 End=30m 後讀回  End=1181.103
+寫回 -1.0 後讀回   Start=-1.0  End=-1.0   ← 若讀回不是 -1.0，代表 -1.0 不可寫入
+
+## E. fog 深度標定（相機退後法：距離明確無歧義）
+
+-- FogEndDist = 60.0 m（寫入 2362.2 英吋，讀回 2362.206）
+距離 1 m	寫檔=true	bytes=1119
+距離 2 m	寫檔=true	bytes=3797
+距離 5 m	寫檔=true	bytes=5218
+距離 10 m	寫檔=true	bytes=2488
+距離 20 m	寫檔=true	bytes=1273
+距離 50 m	寫檔=true	bytes=552
+
+-- FogEndDist = 30.0 m（寫入 1181.1 英吋，讀回 1181.103）
+距離 1 m	寫檔=true	bytes=612
+距離 2 m	寫檔=true	bytes=4474
+距離 5 m	寫檔=true	bytes=5247
+距離 10 m	寫檔=true	bytes=2589
+距離 20 m	寫檔=true	bytes=1183
+距離 50 m	寫檔=true	bytes=317
+
+（灰階值由 Claude 端讀 PNG 取樣，不在 Ruby 端解碼）
+
+## F. 三 pass 耗時（1024x1024）
+beauty = 0.059s
+edge   = 0.042s
+depth  = 0.037s
+合計   = 0.139s   （spec 目標 p50 ≤ 3s）
+view.average_refresh_time = 0.0004559159278869629
+view.last_refresh_time    = 0.00025391578674316406

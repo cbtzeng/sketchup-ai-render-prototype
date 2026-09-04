@@ -30,14 +30,14 @@
 |---|---|---|---|
 | 1.1 | `view.write_image` 存在，可輸出 PNG/JPG | 🟢 | 副檔名決定格式 |
 | 1.2 | 有舊版位置參數形式與新版 options hash 形式（含 `:filename, :width, :height, :antialias, :compression`） | 🟢 | 新專案用 hash 形式 |
-| 1.3 | 輸出解析度可大於 viewport（離螢幕渲染） | 🟡 | 可以，但上限受硬體/驅動影響，需實測 |
-| 1.4 | **當要求的寬高比 ≠ viewport 寬高比時，畫面如何處理（裁切 / 加黑邊 / 重新取景）** | 🔴 | **最高風險項**。若處理方式不可預期，三個 pass 之間可能不像素對齊，整個論點就垮了。必須實測 |
-| 1.5 | `Sketchup::Camera#aspect_ratio=` 可鎖定寬高比（0 = 跟隨 viewport） | 🟡 | API 我確定存在；但它是否足以讓 1.4 變成完全確定的行為，需實測 |
+| 1.3 | 輸出解析度可大於 viewport | 🟢 **已實測** | 1512×849 的 viewport 成功輸出 1024×1024 與 1512×849，皆回傳 true |
+| 1.4 | 寬高比 ≠ viewport 時的取景行為 | 🟢 **已實測解決** | **取景只由 width/height 決定**：垂直 FOV 固定（`fov_is_height?`=true），水平視野由長寬比推導。`camera.aspect_ratio` 對 write_image **完全無影響**（設 0.0 與 1.0 產出的 PNG 位元組相同）。→ 三 pass 用同一組尺寸即必然對齊，不需任何額外機制。見 journal 002 |
+| 1.5 | `Camera#aspect_ratio=` 可鎖定寬高比 | 🟢 **已實測：對 write_image 無效** | 它只影響 viewport 顯示（加黑邊），不影響輸出。**不要在擷取流程中設定它** —— 純副作用 |
 | 1.6 | `:transparent => true` 是否支援、與 fog/天空的互動 | 🔴 | 我不確定，需實測 |
 | 1.7 | 改完 rendering_options 後是否需要 `view.refresh` / `invalidate` | 🟡 | `View` 同時有 `refresh` 與 `invalidate`（已實測存在），另有 `average_refresh_time` / `last_refresh_time` 可直接量測重繪耗時。**是否必要仍待 Task 0.2 驗證**，但工具齊全 |
-| 1.8 | 三個 pass 在 1024×1024 的總耗時 | 🔴 | 直接決定 spec 的 p50 ≤ 3s 是否可達 |
+| 1.8 | 三 pass 在 1024×1024 的總耗時 | 🟡 **初測 0.139 s** | beauty 0.059 / edge 0.042 / depth 0.037。**但測試模型近乎空白，僅一面牆**，不能當作真實場景的數字。spec 目標 p50 ≤ 3 s 看似有大量餘裕，需在 Phase 4 的真實場景上複測 |
 | 1.9 | 邊線寬度以 px 計，導致高解析度下線相對變細 | 🟡 | 若成立，edge pass 的線寬需隨解析度調整，否則 ControlNet 吃到的線稿密度不一致 |
-| 1.10 | **`View#device_width` / `device_height` 與 `vpwidth` / `vpheight` 並存** | 🔴 新發現 | dump 顯示 View 同時有這兩組方法。Retina 螢幕上 device 尺寸可能是 vp 的 2 倍（本機 vpwidth=1512）。**這直接影響像素對齊**：若 `write_image` 的座標基準是 device 而非 vp，算出的輸出尺寸會差一倍。Task 0.2 必須同時印出兩組數字 |
+| 1.10 | `device_width/height` vs `vpwidth/height` | 🟢 **已實測：不影響對齊** | 倍率確為 2.0（Retina）。但 `write_image` 吃的是絕對像素數，與此無關。僅在螢幕座標↔輸出座標換算時才需要。`graphics_engine` = `:graphics_engine_2024` |
 | 1.11 | `Camera#fov_is_height?` 存在 | 🟢 **已實測** | 決定 FOV 以高還是以寬量測 —— 正是寬高比改變時取景怎麼變的關鍵。dump 當前 `fov = 35.0`、`aspect_ratio = 0.0`（0 = 跟隨 viewport，先前 🟡 的猜測成立） |
 
 **替代方案（若 write_image 有致命問題）**：`view.write_image` 之外沒有其他官方離螢幕出圖途徑。
@@ -52,11 +52,11 @@
 | 2.1 | `model.rendering_options` 回傳 `Sketchup::RenderingOptions`，用 `[]` / `[]=` 存取字串 key | 🟢 | |
 | 2.2 | 可列舉所有 key | 🟢 **已實測** | `RenderingOptions` 含 Enumerable，`each_pair` / `each_key` / `keys` / `to_h` 全部可用。共 58 個 key，完整 dump 見 `tools/spike/results/2026-09-04-env-dump.txt` |
 | 2.3 | 控制邊線/面/材質/霧的 key | 🟢 **已實測** | 上述 key 名全部存在，已寫入 `src/architech_render/capture/options_keys.rb`。**兩項修正**：(a) 我先前猜的 `FaceColorMode` **不存在**；(b) `DisplayShadows` 不在 rendering_options，在 `shadow_info`。另：深度暗示的 key 確實是 `DrawDepthQue`（Que 不是 Cue），先前對拼字的懷疑成立 |
-| 2.3b | **`FogStartDist` / `FogEndDist` 預設值皆為 `-1.0`** | 🔴 新發現 | 強烈暗示這是「auto（由模型範圍自動計算）」的哨兵值。**若是如此，設定明確距離時的行為會與 UI 滑桿完全不同**，Task 0.3 必須先確認這件事再標定 |
-| 2.4 | `RenderMode` 的整數值對應哪個顯示模式（wireframe / hidden line / shaded / textured / monochrome） | 🔴 | 我不確定精確映射，需實測列舉 |
-| 2.5 | 改 rendering_options 是否會把 model 標成 dirty（造成關檔時跳「要儲存嗎」） | 🔴 | 若會，即使還原也可能留下 dirty flag，需驗證能否用 `start_operation(..., transparent)` 或其他方式規避 |
-| 2.6 | 改 rendering_options 是否會污染 undo stack | 🔴 | 同上，使用者按 Ctrl+Z 應該回到自己的編輯，不該撤銷我們的擷取步驟 |
-| 2.7 | snapshot → restore 能否完全還原（含浮點值） | 🟡 | 原則上可以；需寫「dump→改→還原→再 dump→逐 key 比對」的測試 |
+| 2.3b | `FogStartDist` / `FogEndDist` 的 `-1.0` | 🟢 **已實測解決** | 確為 auto 哨兵值，且**可寫入**。開啟 `DisplayFog` 不會自動把它換成計算值。寫入明確距離（英吋）後精確保留，寫回 `-1.0` 可恢復 auto |
+| 2.4 | `RenderMode` 的整數值對應 | 🟡 **部分確定** | **0 = 線框**（面不繪製，畫背面邊線）、**1 = 隱藏線**（面以背景色填滿，不畫背面邊線）← edge pass 用 1。**2/3/4/7 在測試模型上位元組完全相同**（單一無貼圖面，shaded 與 textured 無從區分），5 疑為單色（純白佔比最高、相異色數最少），6 面呈 237 灰、用途未明。**需在有材質的真實場景上複測** |
+| 2.5 | 改 rendering_options 是否讓 model 變 dirty | 🟢 **已實測：不會** | 進場前 `modified? = false`，跑完 60+ 次 key 寫入與相機移動後仍為 `false`。**你在 Q13 的推測（會變 true）不成立** —— 這是好消息，代表擷取不會讓使用者被問「要儲存嗎」 |
+| 2.6 | 改 rendering_options 是否污染 undo stack | 🟡 **未直接測** | 本次以 `start_operation` + `abort_operation` 包住臨時幾何，`modified?` 未被設起。但**沒有實際按 Ctrl+Z 驗證**。仍需一次手動測試 |
+| 2.7 | snapshot → restore 能否完全還原 | 🟢 **已實測** | 腳本自我驗證「rendering_options 已完全還原」，逐 key 比對無差異，含 Color 與浮點值 |
 | 2.8 | `model.shadow_info`（陰影開關、太陽方向）可存取與還原 | 🟢 | |
 | 2.9 | `model.styles.add_style(path, select)` 可載入 .style 檔 | 🟡 | 我記得存在。但用「打包好的 .style 檔」切換 vs「直接改 rendering_options」哪個更快更乾淨，需實測比較。用 .style 的優點是還原乾淨、行為可預期 |
 
@@ -67,14 +67,14 @@
 | # | 項目 | 信心 | 說明 |
 |---|---|---|---|
 | 3.1 | **Ruby API 沒有任何方式讀取 GPU depth buffer / z-buffer** | 🟢 | 這就是為什麼要用 fog 當 workaround。這一點我很確定 |
-| 3.2 | fog 相關的 rendering_options key 存在且可程式化開關與設色 | 🟢 **已實測** | `DisplayFog` / `FogColor` / `FogStartDist` / `FogEndDist` / `FogUseBkColor` 五個 key 全部存在。但見 2.3b：預設值 -1.0 的語意未明 |
-| 3.3 | `FogStartDist` / `FogEndDist` 的**單位與座標意義**（模型單位？相機距離？沿視線還是歐氏距離？） | 🔴 | 不確定。SketchUp UI 上的 fog 是滑桿，API 是距離值，兩者映射我不敢保證 |
-| 3.4 | **fog 的衰減是線性還是指數** | 🔴 | **決定成敗**。若是指數，灰階值 ≠ 線性深度，必須標定成查表函數，否則餵給 ControlNet 的是被扭曲的深度 |
-| 3.5 | fog 是否同時作用於邊線、面、背景/天空 | 🔴 | 若背景不吃 fog，遠景會出現不連續的深度斷層 |
-| 3.6 | 「白面 + 黑霧 + 關邊線 + monochrome」能否得到單調遞增的可用灰階深度 | 🔴 | 需以已知距離的階梯測試模型驗證 |
-| 3.7 | fog 深度的**標定方法** | 🟢（方法確定，結果待測） | 建一個階梯模型：在相機前方 1/2/5/10/20/50 m 各放一面白牆 → 擷取 fog pass → 讀各面灰階值 → 擬合灰階↔距離曲線。**這個標定實驗是整個專案第一件該做的事**，成本 30 分鐘，決定要不要改架構 |
+| 3.2 | fog 相關 key 存在且可程式化控制 | 🟢 **已實測** | 五個 key 全部存在且可讀寫。`-1.0` 是可寫入的哨兵值，代表 auto；寫入明確距離後精確保留 |
+| 3.3 | `FogStartDist`/`FogEndDist` 的單位與意義 | 🟢 **已實測** | 單位為**英吋**（SketchUp 內部單位）。寫入 `60 × 39.3701` 讀回 `2362.206`，精確保留。距離自相機 eye 起算 |
+| 3.4 | fog 的衰減是線性還是指數 | 🟢 **已實測：完全線性** | `grey = 255 × (1 − (d−start)/(end−start))`，clamp。12 個標定點誤差全部 ≤ ±0.5 灰階（即量化誤差）。見 journal 003 |
+| 3.5 | fog 是否作用於邊線、面、背景 | 🟢 **已實測** | 背景（無幾何處）呈純霧色，與遠距離連續，**沒有深度斷層**。這是 fog-as-depth 可用的重要前提 |
+| 3.6 | 白面 + 黑霧能否得到單調可用的灰階深度 | 🟢 **已實測：可以，且可逆** | 不只單調，是精確線性。`options_keys.rb` 的 `grey_to_distance` 可無損還原公尺數 |
+| 3.7 | fog 深度的標定方法 | 🟢 **已完成** | 改用「相機退後法」：單一牆面 + 相機退到各距離，比原本蓋六面牆更無歧義。腳本 `tools/spike/probe_view.rb` E 節 |
 | 3.8 | 後備方案：`view.pickray(x, y)` + `model.raytest(ray)` 產生 depth map | 🟢 | 這兩個 API 我確定存在，回傳交點與路徑。**這是物理正確的真深度**，缺點是慢：128×128 就要 16,384 次 raytest，在主執行緒上會凍結 UI |
-| 3.9 | raytest 的實際速度 | 🔴 | 需實測。若 64×64 可在 1s 內完成，就足以當作 evaluation 的 GT-depth（不必當生產用的控制圖，只要當量尺） |
+| 3.9 | raytest 的實際速度 | ⚪ **不再需要** | fog 已證實可用（3.4），raytest 後備方案不啟用。若日後要交叉驗證 fog 的正確性可再測，非必要 |
 
 **結論**：fog 深度是有風險的假設，不是已知事實。
 **建議把 3.7 的標定實驗排在所有實作之前**。若 fog 不可用，方案退化為
@@ -100,7 +100,7 @@
 |---|---|---|---|
 | 5.1 | `Sketchup::Http::Request`（SU2017+）非同步、callback 在主執行緒 | 🟢 | |
 | 5.2 | 是否支援 binary body / multipart 上傳圖檔 | 🔴 | **需實測**。若不支援，改用「雲端發簽名 URL → PUT raw bytes」，或退回 `net/http` |
-| 5.3 | 可設 headers、可設逾時 | 🟢/🔴 **已實測** | `Request` 的方法為 `[:body, :body=, :cancel, :headers, :headers=, :method=, :set_download_progress_callback, :set_upload_progress_callback, :start, :status, :url]`。headers 可設 ✓；**沒有任何逾時設定方法** ✗ → 逾時要靠 `UI.start_timer` 自行計時後呼叫 `cancel`。`Sketchup::Http` 常數含 PUT / POST 與 STATUS_* |
+| 5.3 | 可設 headers、可設逾時 | 🟢 **已實測（有一項缺失）** | `Request` 的方法為 `[:body, :body=, :cancel, :headers, :headers=, :method=, :set_download_progress_callback, :set_upload_progress_callback, :start, :status, :url]`。headers 可設 ✓；**沒有任何逾時設定方法** ✗ → 逾時要靠 `UI.start_timer` 自行計時後呼叫 `cancel`。`Sketchup::Http` 常數含 PUT / POST 與 STATUS_* |
 | 5.4 | Ruby stdlib `net/http` + OpenSSL 可用（HTTPS） | 🔴 **修正：不能直接用** | `require` 成功（OpenSSL gem 3.1.0 / library 3.4.1），但 **`OpenSSL::X509::DEFAULT_CERT_FILE` 指向打包機器路徑 `/Volumes/X10_Pro/conan1/...`，該檔在使用者機器上不存在**，預設憑證驗證會失敗。**解法已確認可行**：顯式傳 `ca_file`。來源有二 —— macOS 的 `/etc/ssl/cert.pem`（6263 行，存在），或 SketchUp 自帶的 `SketchUp.app/Contents/Resources/Tools/cacert.pem`（存在）。**後者較安全，不依賴使用者系統狀態**。我先前說「幾乎可以確定能用」是錯的 —— 能用，但不指定 CA 會靜默失敗在 TLS 握手 |
 | 5.5 | 企業 proxy / 憑證攔截環境下的行為 | 🔴 | 原型可先不管，但要記為已知限制 |
 
