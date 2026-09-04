@@ -25,31 +25,59 @@ module ArchitechRender
         attr_reader :backend
       end
 
-      def self.detect!
-        if defined?(::Digest) && defined?(::Digest::SHA256)
-          @backend = :digest
-          return @backend
-        end
+      # 已知向量：sha256("abc")。用「真的算一次」來判斷後端可不可用，
+      # 而不是檢查常數存不存在 —— 常數檢查會被 autoload、部分載入、
+      # 相依缺失等狀況騙過去，而我們真正要問的問題只有一個：
+      # 「這條路能不能算出正確的 SHA-256？」
+      KNOWN_INPUT  = 'abc'
+      KNOWN_DIGEST = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
 
-        begin
+      CANDIDATES = [
+        [:digest, lambda do |data|
+          require 'digest'
+          require 'digest/sha2'   # Digest::SHA256 在這裡才會被定義
+          ::Digest::SHA256.hexdigest(data)
+        end],
+        [:openssl, lambda do |data|
           require 'openssl'
-          if defined?(::OpenSSL::Digest::SHA256)
-            @backend = :openssl
-            return @backend
-          end
-        rescue LoadError, StandardError
-          # 往下一層
-        end
+          # 這條路不需要 OpenSSL::Digest::SHA256 常數，
+          # 在 openssl/digest.rb 的相依有問題時仍可能可用。
+          ::OpenSSL::Digest.digest('SHA256', data).unpack1('H*')
+        end],
+        [:pure_ruby, ->(data) { PureSha256.hexdigest(data) }]
+      ].freeze
 
-        @backend = :pure_ruby
+      # 實測在同一台機器上看過兩種相反結果 —— 有時 require 'digest' 直接
+      # LoadError（找不到 digest.so），有時完全正常。原因未明（見 journal 008）。
+      # 所以這裡不做任何靜態假設，每次載入都實際驗證一遍。
+      def self.detect!
+        @detect_log = []
+        CANDIDATES.each do |name, fn|
+          begin
+            got = fn.call(KNOWN_INPUT)
+            if got == KNOWN_DIGEST
+              @detect_log << "#{name}: OK"
+              @impl = fn
+              return @backend = name
+            end
+            @detect_log << "#{name}: 算出的值不對（#{got.to_s[0, 16]}…）"
+          rescue LoadError => e
+            @detect_log << "#{name}: LoadError #{e.message[0, 40]}"
+          rescue StandardError, ScriptError => e
+            @detect_log << "#{name}: #{e.class}"
+          end
+        end
+        # PureSha256 是自己實作的，理論上不可能走到這裡。
+        raise "沒有任何可用的 SHA-256 實作：#{@detect_log.inspect}"
       end
 
+      # 給診斷用：偵測過程中每一層發生了什麼。
+      # backend 落到 pure_ruby 時，這是唯一看得出「為什麼」的地方。
+      def self.detect_log = @detect_log || []
+
       def self.hexdigest(data)
-        case (@backend || detect!)
-        when :digest  then ::Digest::SHA256.hexdigest(data)
-        when :openssl then ::OpenSSL::Digest::SHA256.hexdigest(data)
-        else PureSha256.hexdigest(data)
-        end
+        detect! unless @impl
+        @impl.call(data)
       end
 
       def self.file_hexdigest(path)

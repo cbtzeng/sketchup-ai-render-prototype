@@ -26,8 +26,12 @@ puts "\n===== SketchUp Ruby stdlib 可用性 ====="
 puts "RUBY_VERSION = #{RUBY_VERSION}"
 
 puts "\n[1] 不 require 就已經定義的東西"
+# 注意：不能寫 defined?(Object.const_get(name)) —— defined? 不會求值它的參數，
+# 那只是在問「Object 有沒有 const_get 方法」，永遠回 "method"。要用 const_defined?。
 %w[Digest OpenSSL Socket StringIO Zlib JSON URI Base64].each do |name|
-  probe("defined?(#{name})") { defined?(Object.const_get(name)) ? "已定義" : "未定義" }
+  probe("Object.const_defined?(:#{name})") do
+    Object.const_defined?(name) ? "已定義" : "未定義（尚未 require）"
+  end
 end
 
 puts "\n[2] require 逐項"
@@ -38,7 +42,9 @@ end
 
 puts "\n[3] require 之後再看一次"
 %w[Digest OpenSSL Socket StringIO Zlib JSON Base64 SecureRandom].each do |name|
-  probe("defined?(#{name})") { defined?(Object.const_get(name)) ? "已定義" : "未定義" }
+  probe("Object.const_defined?(:#{name})") do
+    Object.const_defined?(name) ? "已定義" : "未定義"
+  end
 end
 
 puts "\n[4] 雜湊相關的細節"
@@ -56,7 +62,7 @@ probe("Sketchup::Http::Request") { defined?(Sketchup::Http::Request) ? "可用" 
 probe("常數") { Sketchup::Http.constants.sort.inspect }
 
 puts "\n[6] 純 Ruby SHA-256 的實際速度（決定要不要另想辦法）"
-load File.expand_path('../../src/architech_render/net/digest_util.rb', __FILE__)
+load File.expand_path('../../src/architech_render/net/digest_util.rb', File.dirname(__FILE__))
 DU_ = ArchitechRender::Net::DigestUtil
 [64 * 1024, 512 * 1024, 2 * 1024 * 1024].each do |n|
   data = 'x' * n

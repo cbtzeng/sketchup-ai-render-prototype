@@ -95,17 +95,23 @@
 
 ---
 
-## 4.7 【重要】SketchUp 的 Ruby 幾乎沒有原生擴充檔
+## 4.7 【重要】stdlib 的載入結果不穩定，一律執行期驗證
 
-實測（2026-09-04）：整個 `lib/ruby` 目錄底下只有 `debug.bundle` 與 `rbs_extension.bundle`
-兩個原生擴充。`Init_digest` / `Init_socket` / `Init_openssl` / `Init_zlib` 等符號
-**確實存在於 Ruby 二進位中**（`nm` 可見），但顯然沒有註冊進 require 的 builtin 表，
-所以 `require 'digest'`、`require 'socket'` 一樣拋 `LoadError`。
+實測（2026-09-04／05）：`lib/ruby` 底下確實**沒有** `digest.so` / `socket.so`
+這些原生擴充檔（只有 `debug.bundle` 與 `rbs_extension.bundle`），
+但 `Init_digest` / `Init_socket` / `Init_openssl` / `Init_zlib` 的符號
+**確實存在於 Ruby 二進位中**。
 
-已確認**不可用**：`digest`、`socket`、以及所有依賴它們的東西（`net/http` 首當其衝）。
+**同一台機器上，這些 require 出現過兩種相反結果** —— 一次全部 LoadError，
+一次全部成功。原因未明，見 journal 008。
 
-這件事的影響範圍很廣，凡是要用 stdlib 的地方都要先用 `probe_stdlib.rb` 確認，
-**不要假設「Ruby 標準函式庫本來就有」**。
+因此本專案的規則是：**不假設任何 stdlib 可用，也不假設不可用，執行期實際驗證。**
+
+`net/digest_util.rb` 是這個原則的範例：它不檢查常數存不存在，
+而是**真的算一次 `sha256("abc")` 並比對已知值**來挑後端。
+常數檢查會被 autoload、部分載入、相依缺失騙過去。
+
+效能差距使這件事值得認真對待：2 MB 資料，原生實作 1 ms，純 Ruby 約 1.3 秒。
 
 ## 5. 網路
 
@@ -114,8 +120,8 @@
 | 5.1 | `Sketchup::Http::Request`（SU2017+）非同步、callback 在主執行緒 | 🟢 | |
 | 5.2 | 是否支援 binary body / multipart 上傳圖檔 | 🔴 | **需實測**。若不支援，改用「雲端發簽名 URL → PUT raw bytes」，或退回 `net/http` |
 | 5.3 | 可設 headers、可設逾時 | 🟢 **已實測（有一項缺失）** | `Request` 的方法為 `[:body, :body=, :cancel, :headers, :headers=, :method=, :set_download_progress_callback, :set_upload_progress_callback, :start, :status, :url]`。headers 可設 ✓；**沒有任何逾時設定方法** ✗ → 逾時要靠 `UI.start_timer` 自行計時後呼叫 `cancel`。`Sketchup::Http` 常數含 PUT / POST 與 STATUS_* |
-| 5.4 | Ruby stdlib `net/http` | 🔴 **實測：完全不可用** | `require 'net/http'` → `net/protocol` → `require 'socket'` → **`LoadError: cannot load such file -- socket.so`**。SketchUp 的 Ruby 幾乎不附原生擴充檔（lib 內只有 debug.bundle 與 rbs_extension.bundle）。`Init_socket` 的符號雖在二進位中，但顯然沒有註冊進 builtin 表，require 一樣失敗。→ **`Sketchup::Http` 是唯一的網路選項**，`NetHttpBackend` 已無存在意義。先前「顯式傳 ca_file 就能用」的判斷不成立 —— 根本走不到 TLS 那一步 |
-| 5.5 | 企業 proxy / 憑證攔截 | ⚪ **不再適用** | 既然只能用 `Sketchup::Http`，proxy 行為由 SketchUp 自己處理，不是我們能控制的層級 |
+| 5.4 | Ruby stdlib `net/http` | 🟡 **不穩定，不可依賴** | 同一台機器兩次執行得到相反結果：一次 `require 'net/http'` → `socket.so` LoadError，一次完全成功。原因未明，見 journal 008。**我先前根據單次觀察斷言「完全不可用」是錯的。**處置：`Sketchup::Http` 為主要路徑（兩次都可用）；`NetHttpBackend` 保留為「可能可用的後備」，真要用必須實際發一個請求驗證，不能只看 require 有沒有成功 |
+| 5.5 | 企業 proxy / 憑證攔截 | 🔴 未測 | 原型可先不管，記為已知限制 |
 
 ---
 
