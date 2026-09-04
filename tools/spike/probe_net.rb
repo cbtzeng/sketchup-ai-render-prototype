@@ -43,9 +43,14 @@ puts "\n===== EdgeColorMode / raytest / 網路 尖刺 ====="
 
 # ==========================================================================
 puts "\n[A] SHA-256"
-load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'digest_util.rb')
+# 外掛啟動時已從 Plugins 符號連結載過，重複 load 會讓 Ruby 視為不同檔案
+# 而重複定義常數。已經在就直接用。
+unless defined?(ArchitechRender::Net::DigestUtil)
+  load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'digest_util.rb')
+end
 DU = ArchitechRender::Net::DigestUtil unless defined?(DU)
 
+puts "     偵測過程：#{DU.detect_log.inspect}"
 step("後端") do
   { digest: 'Digest::SHA256（最理想）', openssl: 'OpenSSL（可用）',
     pure_ruby: '純 Ruby（可用但慢）' }[DU.backend] || DU.backend.to_s
@@ -60,8 +65,12 @@ end
 puts "\n[B] EdgeColorMode 語意（不需網路）"
 puts "     方法：ForegroundColor 設純紅，看哪些值會讓線變紅"
 
-load File.join(AR_ROOT, 'src', 'architech_render', 'capture', 'options_keys.rb')
-load File.join(AR_ROOT, 'src', 'architech_render', 'capture', 'view_state.rb')
+unless defined?(ArchitechRender::Capture::OptionsKeys)
+  load File.join(AR_ROOT, 'src', 'architech_render', 'capture', 'options_keys.rb')
+end
+unless defined?(ArchitechRender::Capture::ViewState)
+  load File.join(AR_ROOT, 'src', 'architech_render', 'capture', 'view_state.rb')
+end
 K  = ArchitechRender::Capture::OptionsKeys unless defined?(K)
 VS = ArchitechRender::Capture::ViewState   unless defined?(VS)
 

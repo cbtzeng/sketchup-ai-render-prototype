@@ -61,16 +61,45 @@ puts "\n[5] Sketchup::Http 的能力"
 probe("Sketchup::Http::Request") { defined?(Sketchup::Http::Request) ? "可用" : "不可用" }
 probe("常數") { Sketchup::Http.constants.sort.inspect }
 
-puts "\n[6] 純 Ruby SHA-256 的實際速度（決定要不要另想辦法）"
-load File.expand_path('../../src/architech_render/net/digest_util.rb', File.dirname(__FILE__))
-DU_ = ArchitechRender::Net::DigestUtil
-[64 * 1024, 512 * 1024, 2 * 1024 * 1024].each do |n|
-  data = 'x' * n
-  t = Time.now
-  DU_.hexdigest(data)
-  ms = ((Time.now - t) * 1000).round
-  puts "  #{(n / 1024.0).round.to_s.rjust(5)} KB  →  #{ms.to_s.rjust(5)} ms" \
-       "  (#{(n / 1024.0 / 1024 / (ms / 1000.0)).round(2)} MB/s)"
+puts "\n[6] SHA-256 後端與速度"
+
+# 外掛啟動時已經從 Plugins 的符號連結載過 digest_util，
+# 這裡再從 repo 路徑 load 會被 Ruby 視為不同檔案而重複定義常數。
+# 已經在就直接用。
+unless defined?(ArchitechRender::Net::DigestUtil)
+  load File.expand_path('../../src/architech_render/net/digest_util.rb', File.dirname(__FILE__))
 end
+DU_ = ArchitechRender::Net::DigestUtil
+
+puts "  偵測到的後端：#{DU_.backend}"
+DU_.detect_log.each { |l| puts "    #{l}" }
+puts
+
+def bench(label, sizes)
+  sizes.each do |n|
+    data = 'x' * n
+    t = Time.now
+    yield data
+    ms = ((Time.now - t) * 1000)
+    rate = ms > 0 ? (n / 1024.0 / 1024 / (ms / 1000.0)).round(1) : nil
+    puts "  #{label}  #{(n / 1024).to_s.rjust(5)} KB  →  #{ms.round.to_s.rjust(6)} ms" \
+         "#{rate ? "  (#{rate} MB/s)" : '  (太快，量不到)'}"
+  end
+end
+
+SIZES = [64 * 1024, 512 * 1024, 2 * 1024 * 1024].freeze
+
+puts "  實際使用的後端（#{DU_.backend}）："
+bench("  ", SIZES) { |d| DU_.hexdigest(d) }
+
+puts
+puts "  純 Ruby 後備實作（只在前兩層都失敗時才會用到）："
+puts "  ⚠️ 2 MB 這一項可能要跑好幾秒，這正是我們想知道的數字。"
+bench("  ", SIZES) { |d| DU_::PureSha256.hexdigest(d) }
+
+puts
+puts "  判讀：若實際後端是 digest 或 openssl，速度不是問題。"
+puts "        若是 pure_ruby，三張 1024² 控制圖的雜湊會明顯拖慢擷取，"
+puts "        屆時要改成分塊 + UI.start_timer 讓出主執行緒。"
 
 puts "\n===== 完成 ====="
