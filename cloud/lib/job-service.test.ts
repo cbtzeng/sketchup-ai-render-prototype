@@ -298,20 +298,26 @@ describe('queued → retrying（provider 在 submit 當下就回 5xx / 逾時）
     const job = await jobAt('queued');
 
     // 第 1 次：submit 5xx → retrying → 退避 10s 後回 queued
-    await svc.transition(job.id, 'retrying', { errorClass: 'http_5xx' });
+    // next_attempt_at 在**進入** retrying 時就寫定 —— 那才是「這次何時可以重送」。
+    let retrying = await svc.transition(job.id, 'retrying', { errorClass: 'http_5xx' });
+    expect(retrying.next_attempt_at).toBe('2026-09-04T00:00:10.000Z');
     let requeued = await svc.transition(job.id, 'queued', {});
     expect(requeued.retry_count).toBe(1);
-    expect(requeued.next_attempt_at).toBe('2026-09-04T00:00:10.000Z');
+    // 重送出去就不再是等待中，清空避免 sweeper 的粗篩再撈到它
+    expect(requeued.next_attempt_at).toBeNull();
 
     // 第 2 次：退避 40s
-    await svc.transition(job.id, 'retrying', { errorClass: 'timeout' });
+    retrying = await svc.transition(job.id, 'retrying', { errorClass: 'timeout' });
+    expect(retrying.next_attempt_at).toBe('2026-09-04T00:00:40.000Z');
     requeued = await svc.transition(job.id, 'queued', {});
     expect(requeued.retry_count).toBe(2);
-    expect(requeued.next_attempt_at).toBe('2026-09-04T00:00:40.000Z');
+    expect(requeued.next_attempt_at).toBeNull();
 
     // 第 3 次：額度用盡。進 retrying 仍合法（錯誤分類可重試），
     // 但 retrying → queued 會被 RETRY_BUDGET_EXHAUSTED 擋下，只剩 failed 這條路。
-    await svc.transition(job.id, 'retrying', { errorClass: 'http_5xx' });
+    // 此時不該有退避時間 —— 不會有下一次重送了。
+    const exhausted = await svc.transition(job.id, 'retrying', { errorClass: 'http_5xx' });
+    expect(exhausted.next_attempt_at).toBeNull();
     await expect(svc.transition(job.id, 'queued', {})).rejects.toMatchObject({
       code: 'RETRY_BUDGET_EXHAUSTED',
     });
@@ -360,17 +366,21 @@ describe('retrying → queued 最多 2 次，退避 10s / 40s', () => {
     const job = await jobAt('running');
 
     // 第 1 次重試
-    await svc.transition(job.id, 'retrying', { errorClass: 'http_5xx' });
+    // next_attempt_at 在**進入** retrying 時就寫定 —— 那才是「這次何時可以重送」。
+    let retrying = await svc.transition(job.id, 'retrying', { errorClass: 'http_5xx' });
+    expect(retrying.next_attempt_at).toBe('2026-09-04T00:00:10.000Z');
     let requeued = await svc.transition(job.id, 'queued', {});
     expect(requeued.retry_count).toBe(1);
-    expect(requeued.next_attempt_at).toBe('2026-09-04T00:00:10.000Z');
+    // 重送出去就不再是等待中，清空避免 sweeper 的粗篩再撈到它
+    expect(requeued.next_attempt_at).toBeNull();
 
     // 第 2 次重試
     await svc.transition(job.id, 'running', {});
-    await svc.transition(job.id, 'retrying', { errorClass: 'timeout' });
+    retrying = await svc.transition(job.id, 'retrying', { errorClass: 'timeout' });
+    expect(retrying.next_attempt_at).toBe('2026-09-04T00:00:40.000Z');
     requeued = await svc.transition(job.id, 'queued', {});
     expect(requeued.retry_count).toBe(2);
-    expect(requeued.next_attempt_at).toBe('2026-09-04T00:00:40.000Z');
+    expect(requeued.next_attempt_at).toBeNull();
 
     // 第 3 次：額度用盡
     await svc.transition(job.id, 'running', {});
@@ -469,6 +479,8 @@ describe('任何非終態 → expired（created_at + 10 分鐘）', () => {
     });
   });
 
+  // 注意：生產路徑用的是 RetryScheduler.sweepExpired（有筆數上限、會釋放額度）。
+  // 這個測試只驗 job-service 這一層的轉移邏輯，兩者不可同時接線 —— 會重複釋放 cents。
   it('sweepExpired 只掃到過期的非終態 job', async () => {
     const stale = await jobAt('running');
     clock.advance(10 * 60 * 1000);

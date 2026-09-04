@@ -32,7 +32,7 @@ import { releaseEstimate, toJobView } from '../../../../lib/job-view.js';
  *   JOB-12 405 方法不符（只接受 POST）
  *   JOB-24 400 路徑缺少 job id
  *   JOB-44 404 job 不存在或不屬於這個使用者
- *   JOB-60 409 目前狀態不可取消（created / retrying —— 轉移表缺這兩條邊）
+ *   JOB-60 409 目前狀態不可取消（保留碼；轉移表補齊後已無狀態會走到這裡）
  *   JOB-61 409 job 已進入終態（succeeded / failed / expired）
  *   JOB-62 409 取消時狀態已被其他路徑改掉（CAS 失敗），請重新查詢
  */
@@ -55,14 +55,10 @@ export async function handle(req: ApiRequest, ctx: ApiContext): Promise<ApiRespo
   if (isTerminal(job.status)) {
     throw new ApiError('JOB-61', 409, `job 已經是 ${job.status}，無法取消`, { status: job.status });
   }
-  if (job.status === 'created' || job.status === 'retrying') {
-    throw new ApiError(
-      'JOB-60',
-      409,
-      `目前狀態 ${job.status} 不支援取消（轉移表缺這條邊），只能等逾時`,
-      { status: job.status, gap: `${job.status} → cancelled 不在 architecture.md 的轉移表內` },
-    );
-  }
+  // 2026-09-05：created / retrying → cancelled 兩條邊已補進轉移表，
+  // 這裡原本的擋阻已移除。非法轉移交給 job-service 判定 ——
+  // 端點自己維護一份「哪些狀態可取消」的清單，就是第二份真實來源，
+  // 遲早會跟轉移表不同步（這次就是）。
 
   const service = new JobService(ctx.store, { now: ctx.now });
   let cancelled;

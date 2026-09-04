@@ -133,21 +133,20 @@ describe('POST /v1/jobs/:id/cancel', () => {
     expect(body['status']).toBe('cancelled');
   });
 
-  it('created 狀態不支援取消 → 409 JOB-60，並說明是轉移表的缺口（不假裝取消成功）', async () => {
+  // 2026-09-05：這兩個狀態原本回 JOB-60「轉移表缺這條邊」。
+  // 轉移表已補齊，端點的擋阻也移除了 —— 使用者在上傳階段或退避等待中
+  // 按取消，本來就不該被要求乾等到逾時。
+  it('created → cancelled（使用者在上傳階段就按取消）', async () => {
     const job = await seedJob(h, 'created');
-    const err = await catchApiError(() =>
-      cancelJob(makeRequest({ method: 'POST', params: { id: job.id } }), h.ctx),
-    );
-    expect(err).toMatchObject({ code: 'JOB-60', httpStatus: 409 });
-    expect(JSON.stringify(err.detail)).toContain('created → cancelled');
-    expect((await h.store.getJob(job.id))?.status).toBe('created');
+    const body = bodyOf(await cancelJob(makeRequest({ method: 'POST', params: { id: job.id } }), h.ctx));
+    expect(body['status']).toBe('cancelled');
+    expect((await h.store.getJob(job.id))?.status).toBe('cancelled');
   });
 
-  it('retrying 狀態同樣回 409 JOB-60', async () => {
+  it('retrying → cancelled（退避等待中按取消）', async () => {
     const job = await seedJob(h, 'retrying');
-    expect(
-      await catchApiError(() => cancelJob(makeRequest({ method: 'POST', params: { id: job.id } }), h.ctx)),
-    ).toMatchObject({ code: 'JOB-60' });
+    const body = bodyOf(await cancelJob(makeRequest({ method: 'POST', params: { id: job.id } }), h.ctx));
+    expect(body['status']).toBe('cancelled');
   });
 
   it('重複取消是冪等的 → 200 already=true，不會重複釋放額度', async () => {

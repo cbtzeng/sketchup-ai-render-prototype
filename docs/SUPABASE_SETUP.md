@@ -13,8 +13,10 @@ Project URL：`https://fkplaizbxefpxqxtewgh.supabase.co`
 |---|---|---|
 | 1 | `cloud/supabase/migrations/001_init.sql` | jobs / job_events / assets / usage_daily + RLS + `reserve_daily_quota()` |
 | 2 | `cloud/supabase/migrations/002_upload_batches.sql` | upload_batches（001 遺漏的） |
+| 3 | `cloud/supabase/migrations/003_retry_index.sql` | 退避重送排程器要用的部分索引 |
 
-**順序不能反** —— 002 的 `claimed_by` 有外鍵指向 001 建的 `jobs` 表。
+**順序不能反** —— 002 的 `claimed_by` 有外鍵指向 001 建的 `jobs` 表，
+003 的索引建在 001 建的 `jobs` 表上。
 
 兩份都已在本機的拋棄式 postgres 17 容器上實測套用成功，並跑過行為驗證
 （unique 約束、job_events 的 append-only 觸發器、RLS 隔離、每日額度的併發正確性）。
@@ -23,6 +25,8 @@ Project URL：`https://fkplaizbxefpxqxtewgh.supabase.co`
 
 執行後應該看到 `Success. No rows returned`。到 **Table Editor** 確認出現五張表：
 `jobs`、`job_events`、`assets`、`usage_daily`、`upload_batches`。
+
+三份都已在本機 postgres 17 容器實測依序套用成功。
 
 ### 如果出錯
 

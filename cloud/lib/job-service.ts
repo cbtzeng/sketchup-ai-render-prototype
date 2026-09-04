@@ -205,6 +205,14 @@ export class JobService {
   /**
    * 掃出所有 `created_at + 10 分鐘` 已到期的非終態 job 並轉成 expired。
    * 回傳實際被過期掉的 job（併發下被別人搶先改掉的會被跳過）。
+   *
+   * ⚠️ **不要把這個方法接到任何端點上。** 生產路徑請用
+   * `RetryScheduler.sweepExpired()`，它多了兩件這裡沒有的事：
+   *   1. 每次掃描的筆數上限（這裡沒有上限，積壓大時會把整批 row 拉進記憶體）
+   *   2. 過期時釋放預留的額度（這裡不釋放）
+   *
+   * 兩個都接線的話會**重複釋放 cents**，那是直接影響帳務的 bug。
+   * 保留這個方法只為了 job-service 自己的單元測試能獨立驗證轉移邏輯。
    */
   async sweepExpired(): Promise<JobRow[]> {
     const cutoff = new Date(this.now().getTime() - COST_LIMITS.HARD_TIMEOUT_MS).toISOString();
@@ -261,9 +269,10 @@ export class JobService {
           { jobId: job.id, from, to },
         );
       }
-      const delayMs = backoffDelayMs(job.retry_count);
       patch.retry_count = job.retry_count + 1;
-      patch.next_attempt_at = new Date(Date.parse(nowIso) + delayMs).toISOString();
+      // 重送出去之後就不再是「等待中」，清掉到期時間。
+      // 留著會讓 sweeper 的粗篩撈到已經回到 queued 的 job。
+      patch.next_attempt_at = null;
     }
 
     // 不分 from 一律套用：submit 當下失敗（queued）與執行中失敗（running）
@@ -276,6 +285,22 @@ export class JobService {
           { jobId: job.id, from, to },
         );
       }
+      // next_attempt_at 在**進入** retrying 時就寫定，語意是「這次何時可以重送」。
+      //
+      // 2026-09-05 修正：原本只在 retrying → queued 寫（now + backoff），
+      // 那是「重送之後」，語意變成「下一次的到期時間」，方向是反的。
+      // 後果是第一次進 retrying 時 next_attempt_at 為 null，
+      // sweeper 直接推它 = 零退避 —— 對著剛掛掉的 provider 連打三次。
+      // 這是會花錢的 bug，由 retry-scheduler 的作者在整合時發現。
+      // 額度已用盡時不算退避 —— 不會有下一次重送了，算了也沒有意義，
+      // 而且 backoffDelayMs 對超出範圍的次數會拋 RangeError。
+      // next_attempt_at = null 正好表達「這一列不等待重送，它只能走向 failed」，
+      // sweeper 的粗篩看到 null 會跳過它（reason: no_retry_schedule）。
+      patch.next_attempt_at =
+        job.retry_count >= COST_LIMITS.MAX_RETRIES
+          ? null
+          : new Date(Date.parse(nowIso) + backoffDelayMs(job.retry_count)).toISOString();
+
       // 重試上限刻意**不**擋在這裡，而是擋在 retrying → queued。
       // 理由：真正花錢的是「再送一次 provider」那一步，而 retrying 只是把
       // 「已經失敗、正在決定後續」這件事寫進軌跡。額度用盡時讓 job 先進
