@@ -1,44 +1,24 @@
 # frozen_string_literal: true
+#
+# SketchUp 外掛載入入口。
+#
+# 這個檔案要放在 SketchUp 的 Plugins 目錄（或以符號連結指過來），
+# 與同名的 architech_render/ 目錄並列。用 tools/install_dev.sh 建立連結。
 
 require 'sketchup.rb'
+require 'extensions.rb'
 
 module ArchitechRender
-  ROOT = File.dirname(__FILE__)
+  unless defined?(@extension_registered)
+    extension = SketchupExtension.new('Architech Render', 'architech_render/main')
+    extension.version     = '0.1.0'
+    extension.creator     = 'cbtzeng'
+    extension.copyright   = '2026'
+    extension.description =
+      '多重控制圖 AI 渲染原型：從 SketchUp 擷取 beauty / hidden-line / fog depth ' \
+      '三張像素對齊的控制圖，一起送給 ControlNet 以提高結構保真度。'
 
-  # 載入順序有相依：
-  #   options_keys 最先（Phase 0 的實測產物，其餘模組都引用它的常數）
-  #   capture/ 內部依序相依，session 依賴前面全部
-  #   net/errors 最先於 net/ 其他檔案
-  #   cloud_backend 依賴 net/ 全部與 jobs/local_index
-  #   ui/ 最後（bridge 會被 dialog 引用）
-  FILES = %w[
-    architech_render/capture/options_keys
-    architech_render/capture/view_state
-    architech_render/capture/alignment
-    architech_render/capture/passes
-    architech_render/capture/session
-    architech_render/net/errors
-    architech_render/net/http_client
-    architech_render/net/uploader
-    architech_render/net/api_client
-    architech_render/net/poller
-    architech_render/jobs/local_index
-    architech_render/net/cloud_backend
-    architech_render/ui/bridge
-    architech_render/ui/dialog
-  ].freeze
-
-  FILES.each { |f| require File.join(ROOT, "#{f}.rb") }
-
-  # 明確注入雲端後端。
-  #
-  # bridge 刻意不用 defined? 偵測 net/ —— 它要求呼叫端明確注入，
-  # 這樣介面不合會在載入期就爆，而不是 render 跑到一半才炸。
-  # 未注入時 bridge 走內建模擬後端，並把 backend:"stub" 一路送到前端，
-  # 面板會顯示 demo 標記。不假裝有雲端。
-  #
-  # 注意：這裡的 UI 是 ArchitechRender::UI，不是 SketchUp 的頂層 ::UI。
-  UI::Bridge.backend = Net::CloudBackend
-
-  UI::Dialog.install_menu!
+    Sketchup.register_extension(extension, true)
+    @extension_registered = true
+  end
 end

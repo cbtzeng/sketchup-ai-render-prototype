@@ -42,6 +42,9 @@ puts "\n[1] 載入模組"
   end
 end
 step('net/cloud_backend') { load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'cloud_backend.rb') }
+step('config')            { load File.join(AR_ROOT, 'src', 'architech_render', 'config.rb') }
+step('套用 config')        { ArchitechRender::Config.apply!; ArchitechRender::Config.summary[:http_backend] }
+step('注入 CloudBackend')  { ArchitechRender::UI::Bridge.backend = ArchitechRender::Net::CloudBackend; 'ok' }
 
 M  = Sketchup.active_model
 V  = M.active_view
