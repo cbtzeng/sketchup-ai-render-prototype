@@ -143,12 +143,21 @@ architecture.md 第 6 節的比較表目前是**我的預期，不是已驗證�
 > 這一節對應 `sketchup-api-feasibility.md` 第 7 節。
 > 我沒有 SketchUp 可測，這些我不會猜。答案回填後，🔴 項目才能降級。
 
-### Q9. 環境基本資料 ✅ 大致已確認
+### Q9. 環境基本資料 ✅ 已完成實測
 
-已由檔案系統取得（見 Q1）。只剩一件事要你在 Ruby Console 確認：
-`RUBY_VERSION` 實際回傳值是否為 `3.2.2`。
+**答（2026-09-04 於 Ruby Console 實測）：**
 
-**答：**
+```
+RUBY_VERSION = 3.2.2
+SketchUp     = 26.2.242
+temp_dir     = /var/folders/b9/dkp1h96x7j9bt344w7cntrdc0000gn/T/com.sketchup.SketchUp.2026.benson
+```
+
+執行期與 app bundle 的 framework 版本一致。`Sketchup.temp_dir` 可用，
+因此驗證腳本一律寫檔到 temp_dir，不需要人工貼長輸出。
+
+Ruby Console 位置：**Extensions → Developer → Ruby Console**
+（由 `MainMenu.nib` 查得，selector 為 `showRubyPanel:`。舊版在 Window 選單，2026 已移動）。
 
 ---
 

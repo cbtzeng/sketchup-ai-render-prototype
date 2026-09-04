@@ -9,9 +9,9 @@
 
 | 項目 | 值 | 來源 |
 |---|---|---|
-| SketchUp | **2026**（26.2 / build 26.2.242） | `/Applications/SketchUp 2026/SketchUp.app` |
+| SketchUp | **2026**（`Sketchup.version` = 26.2.242）✅ 已實測 | `/Applications/SketchUp 2026/SketchUp.app` |
 | 架構 | universal（x86_64 + arm64） | `lipo -archs` |
-| **Ruby** | **3.2.2** | `Contents/Frameworks/Ruby.framework/Versions/3.2.2` |
+| **Ruby** | **3.2.2** ✅ 已於 Ruby Console 實測 `RUBY_VERSION` | 檔案系統與執行期一致 |
 | OpenSSL | 隨附（openssl 3.1.0 gem + stdlib） | Ruby.framework 內 |
 | Plugins 目錄 | `~/Library/Application Support/SketchUp 2026/SketchUp/Plugins` | |
 | macOS | 15.7.1 | |
@@ -87,7 +87,7 @@
 | 4.2 | `UI.start_timer(seconds, repeat) { }` / `UI.stop_timer(id)` 可做輪詢 | 🟢 | 這是 SketchUp 沒有背景執行緒時做非同步的標準手法 |
 | 4.3 | Ruby 跑在主 UI 執行緒，長操作會凍結 SketchUp | 🟢 | 所有設計都要遷就這一點 |
 | 4.4 | HtmlDialog ↔ Ruby 傳遞大字串（base64 預覽圖）的大小上限與效能 | 🔴 | 若上限低或很慢，預覽圖要改走 `file://` 或本機暫存檔路徑而非 base64 |
-| 4.5 | `Sketchup.temp_dir` 可取得暫存目錄 | 🟡 | 我記得存在；不確定的話退回 Ruby 的 `Dir.tmpdir` |
+| 4.5 | `Sketchup.temp_dir` 可取得暫存目錄 | 🟢 **已實測** | 回傳 `/var/folders/.../T/com.sketchup.SketchUp.2026.benson`。不需要 `Dir.tmpdir` fallback |
 
 ---
 
