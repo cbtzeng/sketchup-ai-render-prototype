@@ -7,7 +7,7 @@
     "provider": "local",
     "device": "mps",
     "dtype": "float32",
-    "_dtype_note": "MPS 上 float16 有已知的數值問題（黑圖、NaN）。float32 慢一些但穩定；48 張圖的量級不值得為速度冒險。",
+    "_dtype_note": "實測 (dtype × 解析度) 矩陣：640 下 float16 26.7s、float32 31.8s，產出標準差幾乎相同（21.5 vs 21.4），float16 沒有品質優勢。選 float32 是為了完全避開 MPS 的 float16 黑圖風險 —— 這次 fp16 沒出事，但那是運氣不是保證。代價 19% 時間，換掉一整類數值問題。",
     "controlnets": {
       "edge": "lllyasviel/control_v11p_sd15_canny",
       "depth": "lllyasviel/control_v11f1p_sd15_depth"
@@ -23,9 +23,9 @@
     "_sampler_note": "UniPCMultistepScheduler，少步數下品質較穩定"
   },
   "output": {
-    "width": 768,
-    "height": 768,
-    "_note": "SD1.5 原生解析度是 512，768 是實務上常用且仍在分布內的尺寸。控制圖從 SketchUp 的 1024 下採樣到 768 —— 三個 pass 一起降，所以像素對齊仍然成立。報告中須說明這個尺寸與 spec 4.2 的 1024 不同。"
+    "width": 640,
+    "height": 640,
+    "_note": "實測決定。768 只比 640 多 1.44 倍像素卻慢 7 倍（180.8s vs 31.8s）——那不是計算量而是記憶體換頁，勉強塞得下不等於跑得動。640 下 48 張約 25 分鐘。控制圖從 SketchUp 的 1024 一起下採樣到 640，三個 pass 同時降，像素對齊仍成立。解析度不影響評估效度：A/B/C 在同一解析度下比較，它是受控變因。報告中須說明此值與 spec 4.2 原訂的 1024 不同。"
   },
   "prompt": {
     "_note": "逐字固定。不做任何 LLM 改寫 —— 那會讓 A/B/C 的變因不只是控制圖，整個實驗設計就失效了（已列入 spec 的 Non-goals）。",
@@ -95,5 +95,6 @@
     "max_usd_total": 10.0,
     "max_usd_per_image": 0.08,
     "_note": "48 張以每張 0.03–0.05 估約 US$1.5–2.5，含重跑抓 10 美元上限。超過即中止。"
-  }
+  },
+  "_memory_note": "MPS 是統一記憶體，錯誤訊息顯示其他程式佔了 10.13 GiB。跑批前建議關閉 SketchUp 與瀏覽器，可用記憶體會多出好幾 GB。"
 }
