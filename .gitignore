@@ -15,3 +15,6 @@ docs/journal/_raw/
 cloud/node_modules/
 eval/captures/
 eval/out/
+
+# 本機生成用的 Python 環境（torch 單一 dylib 就 368MB，遠超 GitHub 的 100MB 上限）
+.venv-gen/

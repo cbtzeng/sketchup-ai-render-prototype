@@ -17,7 +17,10 @@ __all__ = ["Provider", "GenerationRequest", "GenerationResult", "DryRunProvider"
 def get(name: str) -> Provider:
     if name == "dryrun":
         return DryRunProvider()
+    if name == "local":
+        from .local import LocalProvider  # 延後匯入：沒裝 torch 時不該在載入期就爆
+        return LocalProvider()
     if name == "fal":
         from .fal import FalProvider  # 延後匯入：沒設 key 時不該在載入期就爆
         return FalProvider()
-    raise ValueError(f"未知的 provider：{name}（可用：dryrun, fal）")
+    raise ValueError(f"未知的 provider：{name}（可用：dryrun, local, fal）")

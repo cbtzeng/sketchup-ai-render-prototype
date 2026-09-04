@@ -134,19 +134,26 @@ def prompt_for(shot: dict, cfg: dict) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="評估跑批")
-    ap.add_argument("--provider", default="dryrun", help="dryrun（預設）或 fal")
+    ap.add_argument("--provider", default=None,
+                    help="dryrun / local / fal。未指定時用 config.json 的 model.provider")
     ap.add_argument("--config", default=str(ROOT / "config.json"))
     ap.add_argument("--captures", default=str(CAPTURES))
     ap.add_argument("--out", default=str(OUT))
     ap.add_argument("--conditions", default=None, help="逗號分隔，預設跑 config 裡全部")
+    ap.add_argument("--shots", default=None,
+                    help="逗號分隔的 shot id，或用 --limit 取前 N 個")
+    ap.add_argument("--limit", type=int, default=None, help="只跑前 N 個 shot（先驗證用）")
     ap.add_argument("--confirm-spend", action="store_true",
                     help="使用會計費的 provider 時必須明確加上，避免手滑")
     args = ap.parse_args(argv)
 
     cfg = load_config(Path(args.config))
-    provider = get_provider(args.provider)
+    provider_name = args.provider or cfg.get("model", {}).get("provider", "dryrun")
+    provider = get_provider(provider_name)
 
-    if provider.name != "dryrun" and not args.confirm_spend:
+    # 只有真的會計費的 provider 才需要確認。本機生成不花錢，
+    # 硬要求 --confirm-spend 只會讓人養成無腦加旗標的習慣，那反而危險。
+    if provider.name not in ("dryrun", "local") and not args.confirm_spend:
         print("這個 provider 會計費。確認要跑的話請加 --confirm-spend。", file=sys.stderr)
         return 2
 
@@ -157,6 +164,12 @@ def main(argv=None) -> int:
               f"或跑 python3 -m eval.make_synthetic_captures 產生合成資料驗證管線。",
               file=sys.stderr)
         return 1
+
+    if args.shots:
+        wanted = set(args.shots.split(","))
+        shots = [s for s in shots if s["id"] in wanted]
+    if args.limit:
+        shots = shots[: args.limit]
 
     conditions = (args.conditions.split(",") if args.conditions
                   else list(cfg["conditions"].keys()))
@@ -169,6 +182,8 @@ def main(argv=None) -> int:
     spent = 0.0
 
     print(f"provider={provider.name}  shots={len(shots)}  conditions={conditions}")
+    if provider.name == "local":
+        print("  第一張會慢很多（要載入模型），之後才是真實速度。")
     for shot in shots:
         for cond in conditions:
             spec = cfg["conditions"][cond]
