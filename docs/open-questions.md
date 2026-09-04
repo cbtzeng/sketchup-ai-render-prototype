@@ -168,7 +168,7 @@ Ruby Console 位置：**Extensions → Developer → Ruby Console**
 **答：✅ 已完成。**完整 dump 見 `tools/spike/results/2026-09-04-env-dump.txt`（已入版控），
 key 名已寫進 `src/architech_render/capture/options_keys.rb`。
 
-重點：`RenderingOptions` 含 Enumerable，`each_pair` 可用，共 **58 個 key**。
+重點：`RenderingOptions` 含 Enumerable，`each_pair` 可用，共 **70 個 key**。
 
 **兩項修正**：`FaceColorMode` 不存在（我先前猜錯，已在 options_keys.rb 中記錄避免重蹈）；
 `DisplayShadows` 在 `shadow_info` 而非 rendering_options。`DrawDepthQue` 的拼字瑕疵確認為真。

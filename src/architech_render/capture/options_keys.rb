@@ -49,6 +49,16 @@ module ArchitechRender
       AMBIENT_OCCLUSION    = "AmbientOcclusion"      # false
       AO_INTENSITY         = "AmbientOcclusionIntensity"
 
+      FOREGROUND_COLOR     = "ForegroundColor"       # 邊線顏色
+      EDGE_COLOR_MODE      = "EdgeColorMode"         # dump 值 1，語意未驗證（見下方註記）
+      DRAW_BACK_EDGES      = "DrawBackEdges"         # false
+      DRAW_HIDDEN          = "DrawHidden"            # false
+      DRAW_HIDDEN_GEOMETRY = "DrawHiddenGeometry"    # false
+      DRAW_HIDDEN_OBJECTS  = "DrawHiddenObjects"     # false
+      DRAW_UNDERGROUND     = "DrawUnderground"       # true ← 預設會畫，需關掉
+      HIDE_CONSTRUCTION_GEOMETRY = "HideConstructionGeometry"  # false ← 預設不隱藏，需開啟
+      DISPLAY_INSTANCE_AXES = "DisplayInstanceAxes"  # false
+
       DISPLAY_SKETCH_AXES  = "DisplaySketchAxes"     # true
       DISPLAY_TEXT         = "DisplayText"           # true
       DISPLAY_DIMS         = "DisplayDims"           # true
@@ -64,6 +74,10 @@ module ArchitechRender
       SHADOW_LIGHT         = "Light"
       SHADOW_DARK          = "Dark"
       SHADOW_USE_SUN_ALL   = "UseSunForAllShading"
+
+      # ⚠️ EDGE_COLOR_MODE 的整數語意**尚未驗證**。dump 當前值為 1。
+      # 若它代表「依材質決定邊線顏色」，那麼設定 FOREGROUND_COLOR 會無效，
+      # edge pass 可能產出彩色線稿。列為下一輪尖刺項目，在驗證前不要依賴它。
 
       # dump 中「不存在」的 key —— 曾經被誤以為存在，記錄下來避免重蹈覆轍
       # FaceColorMode      → 不存在。面的顯示由 RenderMode + DisplayColorByLayer 決定。

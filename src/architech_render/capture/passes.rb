@@ -19,7 +19,11 @@ module ArchitechRender
         Sketchup::Color.new(rgb[0], rgb[1], rgb[2])
       end
 
-      # 關掉所有會干擾控制圖判讀的裝飾。三個 pass 共用。
+      # 關掉所有會干擾控制圖判讀的東西。三個 pass 共用。
+      #
+      # 這裡的每一項都不是「順便關一下」——
+      # 輔助線、隱藏幾何、地下幾何若出現在圖上，ControlNet 會把它們當成真實結構，
+      # 生成出不存在的牆和線。而且三個 pass 若不一致，條件會互相打架。
       def self.strip_decorations(ro)
         ro[K::DISPLAY_SKETCH_AXES]    = false
         ro[K::DISPLAY_TEXT]           = false
@@ -27,6 +31,16 @@ module ArchitechRender
         ro[K::DISPLAY_WATERMARKS]     = false
         ro[K::SHOW_VIEW_NAME]         = false
         ro[K::DISPLAY_SECTION_PLANES] = false
+        ro[K::DISPLAY_INSTANCE_AXES]  = false
+
+        # 以下四項的預設值會讓幾何跑進控制圖，實測 dump 確認：
+        #   HideConstructionGeometry 預設 false → 輔助線會被畫出來
+        #   DrawUnderground          預設 true  → 地面下的幾何會被畫出來
+        ro[K::HIDE_CONSTRUCTION_GEOMETRY] = true
+        ro[K::DRAW_UNDERGROUND]           = false
+        ro[K::DRAW_HIDDEN]                = false
+        ro[K::DRAW_HIDDEN_GEOMETRY]       = false
+        ro[K::DRAW_HIDDEN_OBJECTS]        = false
       end
 
       # ---- pass A：beauty ------------------------------------------------
@@ -62,6 +76,10 @@ module ArchitechRender
           ro[K::DRAW_HORIZON]      = false
           ro[K::EDGE_DISPLAY_MODE] = 1
           ro[K::DRAW_SILHOUETTES]  = true
+          ro[K::DRAW_BACK_EDGES]   = false   # 要遮擋正確的線稿，不要透視背面
+          # 邊線強制為黑。注意：若 EDGE_COLOR_MODE 代表「依材質決定邊線顏色」，
+          # 這一行會無效而產出彩色線稿 —— 該 key 的語意尚未驗證，見 options_keys.rb 註記。
+          ro[K::FOREGROUND_COLOR]  = Passes.color(BLACK)
           ro[K::JITTER_EDGES]      = false
           ro[K::EXTEND_LINES]      = false
           ro[K::DRAW_LINE_ENDS]    = false

@@ -50,7 +50,7 @@
 | # | 項目 | 信心 | 說明 |
 |---|---|---|---|
 | 2.1 | `model.rendering_options` 回傳 `Sketchup::RenderingOptions`，用 `[]` / `[]=` 存取字串 key | 🟢 | |
-| 2.2 | 可列舉所有 key | 🟢 **已實測** | `RenderingOptions` 含 Enumerable，`each_pair` / `each_key` / `keys` / `to_h` 全部可用。共 58 個 key，完整 dump 見 `tools/spike/results/2026-09-04-env-dump.txt` |
+| 2.2 | 可列舉所有 key | 🟢 **已實測** | `RenderingOptions` 含 Enumerable，`each_pair` / `each_key` / `keys` / `to_h` 全部可用。共 70 個 key，完整 dump 見 `tools/spike/results/2026-09-04-env-dump.txt` |
 | 2.3 | 控制邊線/面/材質/霧的 key | 🟢 **已實測** | 上述 key 名全部存在，已寫入 `src/architech_render/capture/options_keys.rb`。**兩項修正**：(a) 我先前猜的 `FaceColorMode` **不存在**；(b) `DisplayShadows` 不在 rendering_options，在 `shadow_info`。另：深度暗示的 key 確實是 `DrawDepthQue`（Que 不是 Cue），先前對拼字的懷疑成立 |
 | 2.3b | `FogStartDist` / `FogEndDist` 的 `-1.0` | 🟢 **已實測解決** | 確為 auto 哨兵值，且**可寫入**。開啟 `DisplayFog` 不會自動把它換成計算值。寫入明確距離（英吋）後精確保留，寫回 `-1.0` 可恢復 auto |
 | 2.4 | `RenderMode` 的整數值對應 | 🟢 **已實測（目視確認）** | **0**=線框、**1**=隱藏線（面填**背景色**）、**2**=著色含貼圖、**5**=單色（面恆為**純白**）、**6**=同 2 但整體壓暗約 7%。**3/4/7 與 2 位元組完全相同**（在有貼圖的場景上仍相同）→ 視為 2 的別名。貼圖顯示由獨立的 `Texture` 布林控制，不歸 RenderMode 管。**edge pass 用 5 不是 1**，理由見 journal 004 |
