@@ -28,23 +28,30 @@ import { REQUIRED_CONTROL_KINDS, TERMINAL_STATUSES, isTerminal } from './db.js';
 /**
  * 每個狀態允許前往的下一個狀態。**終態一律為空陣列。**
  *
- * 與 architecture.md 轉移表的差異，全部列在這裡（沒有隱藏的擴充）：
+ * 本表與 architecture.md（2026-09-04 修訂版）第 3 節的轉移表逐條相符，
+ * 陣列順序也刻意照表列順序排，方便肉眼對照 —— 沒有隱藏的擴充。
  *
- * - 表中沒有 `running → failed`，但同一份表的 `running → retrying` 那一列
- *   寫著「**4xx 一律不重試**」。4xx 若不能進 failed，就只剩下等 expired
- *   （白等 10 分鐘）這條路。因此**新增 `running → failed`**。
- * - 表中沒有 `created → cancelled`：本實作**照表禁止**。使用者在上傳階段
- *   按取消，目前只能靠 client 放棄上傳後等 expired。這是 architecture.md
- *   的缺口，已列入回報。
- * - 表中沒有 `queued → failed` / `queued → retrying`：本實作**照表禁止**。
- *   provider 在 submit 當下就回 4xx 的情境無法表達，同樣列入回報。
- * - 表中沒有 `retrying → cancelled`：照表禁止。
+ * 修訂版補上的四條邊，各自要解決的死路如下（記錄「為什麼」，避免日後被當成
+ * 多餘的邊刪掉）：
+ *
+ * - `created → cancelled`：使用者在上傳階段按取消。少了這條，client 只能
+ *   放棄上傳然後乾等 10 分鐘的 expired，UI 上等同當掉。
+ * - `queued → failed`：provider 在 submit 當下就回 4xx（例如控制圖被判違規）。
+ *   4xx 不可重試，若又不能進 failed 就只剩等 expired。
+ * - `queued → retrying`：provider 在 submit 當下就回 5xx / 逾時。這與
+ *   `running → retrying` 是同一種失敗，只是發生得更早，因此**共用同一組
+ *   guard**（可重試分類 + 重試上限），不另立規則。
+ * - `retrying → cancelled`：退避最長 40 秒，使用者不該被綁在等待裡。
+ *
+ * 反過來說，**沒有**被放寬的仍然沒有：終態一律不可再轉移、`running → queued`
+ * 只能經由 retrying（否則 retry_count 與退避不會被計入）、`retrying → running`
+ * 必須先回 queued 重新送出。
  */
 export const LEGAL_TRANSITIONS: Readonly<Record<JobStatus, readonly JobStatus[]>> = Object.freeze({
-  created: ['queued', 'failed', 'expired'],
-  queued: ['running', 'cancelled', 'expired'],
-  running: ['succeeded', 'retrying', 'failed', 'cancelled', 'expired'],
-  retrying: ['queued', 'failed', 'expired'],
+  created: ['queued', 'failed', 'cancelled', 'expired'],
+  queued: ['running', 'failed', 'retrying', 'cancelled', 'expired'],
+  running: ['succeeded', 'failed', 'retrying', 'cancelled', 'expired'],
+  retrying: ['queued', 'failed', 'cancelled', 'expired'],
   succeeded: [],
   failed: [],
   cancelled: [],
@@ -259,6 +266,8 @@ export class JobService {
       patch.next_attempt_at = new Date(Date.parse(nowIso) + delayMs).toISOString();
     }
 
+    // 不分 from 一律套用：submit 當下失敗（queued）與執行中失敗（running）
+    // 是同一種錯誤，判準必須一致，否則同一個 4xx 會因為時間差而有兩種結局。
     if (to === 'retrying') {
       if (!isRetryableErrorClass(ctx.errorClass)) {
         throw new TransitionGuardError(
@@ -267,6 +276,11 @@ export class JobService {
           { jobId: job.id, from, to },
         );
       }
+      // 重試上限刻意**不**擋在這裡，而是擋在 retrying → queued。
+      // 理由：真正花錢的是「再送一次 provider」那一步，而 retrying 只是把
+      // 「已經失敗、正在決定後續」這件事寫進軌跡。額度用盡時讓 job 先進
+      // retrying、再由 RETRY_BUDGET_EXHAUSTED 逼它收在 failed，job_events
+      // 才看得出「試到最後一次才放棄」；若在此攔下，最後一次失敗會完全沒有紀錄。
     }
 
     if (to === 'expired') {
