@@ -39,8 +39,14 @@ Project URL：`https://fkplaizbxefpxqxtewgh.supabase.co`
 
 RLS policy 綁 `auth.uid()`，所以需要一個真的 auth 使用者才能測。
 
-**【Supabase 網頁】** Authentication → Users → Add user → Create new user
-（email + password 隨便填，這是原型的測試帳號）。
+**【Supabase 網頁】** Authentication → Users → Add user → **Create new user**
+
+- Email 固定用 `architech-test@example.com` —— 固定值才能寫進測試 fixture 並可重現。
+- **勾選 Auto Confirm User**，否則帳號會卡在等 email 驗證。
+- 密碼自己設一個，**不要寫進 repo、也不要貼進對話**。
+
+密碼沒有人需要知道 —— 程式碼裡只用得到 UUID（RLS policy 綁 `auth.uid()`，
+測試資料要指定 `user_id`）。密碼只有你在後台或測登入流程時會用到。
 
 ---
 
