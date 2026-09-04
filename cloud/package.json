@@ -1,0 +1,18 @@
+{
+  "name": "architech-render-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ArchitechRender 雲端層：job 狀態機、成本護欄、provider adapter 介面",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "test:sql": "bash supabase/tests/run.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  }
+}
