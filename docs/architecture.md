@@ -83,6 +83,8 @@ usage_daily(user_id, day, jobs_count, cents_spent)               -- 成本護欄
 - `job_events` append-only：狀態機的除錯全靠它，不要只存當前 status。
 - `assets.sha256`：控制圖去重與快取命中的依據。
 - RLS：使用者只能讀自己的 row。Ruby 層拿的是短效 token，不是 service key。
+- ⚠️ **RLS policy 目前全部綁 `auth.uid()`。** 若 open-questions Q4 最終改走 device_id 模式，
+  四張表的 policy 都要重寫。這是尚未關閉的 schema 級相依。
 
 ---
 
@@ -121,21 +123,62 @@ usage_daily(user_id, day, jobs_count, cents_spent)               -- 成本護欄
 **終態**：`succeeded` / `failed` / `cancelled` / `expired`。終態不可再轉移。
 
 **轉移規則**
+
+> 2026-09-04 修訂：實作 `cloud/lib/job-service.ts` 時發現原表缺 4 條邊，
+> 導致某些真實情境無路可走。已補齊並在下表標註。
+
 | from | to | 觸發者 | 條件 |
 |---|---|---|---|
 | created | queued | 雲端 | 全部 asset 上傳完成、sha256 校驗通過、cost_guard 放行 |
-| created | failed | 雲端 | 上傳逾時（5 min）或校驗失敗 |
+| created | failed | 雲端 | **上傳逾時（5 min）**或校驗失敗 |
+| created | cancelled | 使用者 | **（補）** 上傳階段就按取消。原表沒有這條，使用者只能乾等到 expired |
 | queued | running | provider webhook / 輪詢 | — |
-| queued/running | cancelled | 使用者 | 同時對 provider 發 cancel（best-effort） |
+| queued | failed | 雲端 | **（補）** provider 在 submit 當下就回 4xx |
+| queued | retrying | 雲端 | **（補）** provider 在 submit 當下就回 5xx / 逾時 |
+| queued | cancelled | 使用者 | 同時對 provider 發 cancel（best-effort） |
 | running | succeeded | webhook | 結果已落地 storage |
-| running | retrying | 雲端 | provider 5xx / 逾時；**4xx 一律不重試** |
+| running | failed | 雲端 | **（補）** provider 回 4xx。原表只有 running→retrying 且註明「4xx 一律不重試」，等於 4xx 無路可走，只能白等 10 分鐘變 expired |
+| running | retrying | 雲端 | provider 5xx / 逾時 |
+| running | cancelled | 使用者 | — |
 | retrying | queued | 雲端 | 退避後（10s, 40s），最多 2 次 |
 | retrying | failed | 雲端 | 重試次數用盡 |
+| retrying | cancelled | 使用者 | **（補）** 退避中也要能取消，否則使用者最久要等 10 分鐘 |
 | any non-terminal | expired | 定時清理 | created_at + 10 min |
 
-**冪等性**：`idempotency_key = sha256(controls_sha256 + params_json + user_id)`。
-重複 POST 回同一個 job。Ruby 層網路重試因此不會重複計費。
+**兩個 timeout 的關係（原文件自相矛盾，此處為準）**
+- `created` 狀態的上傳逾時為 **5 分鐘** → 轉 `failed`（不是 expired）。
+- 整體硬性逾時為 `created_at + 10 分鐘` → 轉 `expired`。
+- 兩者不衝突：卡在上傳的 job 5 分鐘就會被判 failed，不會佔用到 10 分鐘。
+
+**schema 需要而原 2.3 節沒寫的欄位**（實作時補上，已寫入 migration）
+- `assets.upload_state` —— 原本只有 `sha256` 一欄，無法區分「還沒上傳」與
+  「上傳了但雜湊不符」，但 `created → queued` 的條件正是「全部上傳完成且校驗通過」。
+- `assets.sha256_declared` —— 用戶端宣告值，與伺服器實算值分開存才驗得起來。
+- `jobs.retry_count`、`jobs.next_attempt_at` —— 轉移表要求「最多 2 次」與退避，
+  但原 schema 沒有落地欄位。
+
+**冪等性**
+
+`idempotency_key = sha256(controls_sha256 + "\n" + canonical_json(params) + "\n" + user_id)`
+
+兩個細節不能省，否則會出現難查的錯誤命中：
+- **三段之間必須有分隔符。** 純串接時 `("ab", "", "c")` 與 `("a", "", "bc")` 會算出
+  同一個 key —— 兩個不同請求互相命中對方的快取。
+- **params 必須 canonical JSON（key 排序）。** 否則 `{a,b}` 與 `{b,a}` 永遠不會命中快取，
+  去重形同虛設。
+
+重複 POST 回同一個 job。Ruby 層的網路重試因此不會重複計費。
 同一個 key 若已有 `succeeded` 的 job，直接回傳舊結果（= 快取命中，成本 0）。
+
+**失敗後重送**：`jobs.idempotency_key` 的 unique index 為 **partial index，
+只涵蓋 `created / queued / running / retrying / succeeded`**。
+`failed / cancelled / expired` 的 job 不佔用 key，使用者用同樣參數重試不會撞 23505。
+（原文件只定義了 succeeded 的情形，沒定義失敗後重送 —— 那會直接撞 unique 約束。）
+
+**成本回填與 usage_daily 的關係**：`admit` 時以 `cost_estimate_cents` 預留額度；
+webhook 回來寫入 `cost_actual_cents` 後，用差額 `(actual - estimate)` 修正
+`usage_daily.cents_spent`。job 進入 `failed` / `cancelled` / `expired` 時，
+把預留的估算值全額釋放。
 
 **Ruby 端的狀態**：Ruby 只維護 `idle / capturing / uploading / tracking`。
 job 的真實狀態一律以雲端為準，Ruby 不做本地推測。這樣 SketchUp 崩潰不會丟 job。
