@@ -33,7 +33,7 @@ puts "modified? 執行前 = #{Sketchup.active_model.modified?}"
 puts "\n[1] 載入模組"
 {
   'capture' => %w[options_keys view_state alignment passes session],
-  'net'     => %w[errors http_client uploader api_client poller],
+  'net'     => %w[errors digest_util http_client uploader api_client poller],
   'jobs'    => %w[local_index],
   'ui'      => %w[bridge dialog]
 }.each do |dir, files|
@@ -163,6 +163,14 @@ end
 puts "\n[6] net / jobs / ui（不觸網，只驗邏輯與接線）"
 E  = ArchitechRender::Net::Errors
 LI = ArchitechRender::Jobs::LocalIndex
+
+check.call("SHA-256 後端可用（SketchUp 沒有 digest.so）") do
+  du = ArchitechRender::Net::DigestUtil
+  got = du.hexdigest('abc')
+  want = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+  raise "雜湊值不對：#{got}" unless got == want
+  "後端 = #{du.backend}"
+end
 
 check.call("錯誤分類：4xx 不重試、5xx 可重試") do
   raise '400 不該可重試' if E.from_status(400).retryable?

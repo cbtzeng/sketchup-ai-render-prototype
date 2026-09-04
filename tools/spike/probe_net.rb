@@ -34,15 +34,44 @@ end
 puts "\n===== 網路 / EdgeColorMode / raytest 尖刺 ====="
 
 # --------------------------------------------------------------------------
-puts "\n[A] 準備測試檔"
-require 'digest'
+puts "\n[A] 準備測試檔與 SHA-256 可用性"
+
+# SketchUp 的 Ruby 幾乎沒有原生擴充檔（整個 lib 只有 debug.bundle 與
+# rbs_extension.bundle）。require 'digest' 會走到 digest/loader.rb，
+# 它去載入不存在的 digest.so 而拋 LoadError。
+# 但 Init_digest / Init_sha2 是靜態連進 Ruby 二進位的（用 nm 驗證過），
+# 所以要探測「已經存在的東西」，不是要求載入檔案。
+load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'digest_util.rb')
+DU = ArchitechRender::Net::DigestUtil
+
+step("SHA-256 後端") do
+  case DU.backend
+  when :digest  then "digest —— Digest::SHA256（靜態連入，最理想）"
+  when :openssl then "openssl —— OpenSSL::Digest::SHA256（可用，稍慢）"
+  else               "pure_ruby —— 純 Ruby 實作（可用但慢）"
+  end
+end
+
+step("與標準向量比對") do
+  got  = DU.hexdigest("abc")
+  want = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+  raise "不符：#{got}" unless got == want
+  "OK"
+end
+
 test_png = File.join(OUT, 'payload.png')
 step("產生一張 512x512 的 PNG") do
   Sketchup.active_model.active_view.write_image(filename: test_png, width: 512, height: 512)
   "#{File.size(test_png)} bytes"
 end
-raw    = File.binread(test_png)
-sha    = Digest::SHA256.hexdigest(raw)
+
+raw = File.binread(test_png)
+step("計算 sha256（順便量速度）") do
+  t = Time.now
+  $sha = DU.hexdigest(raw)
+  "#{raw.bytesize} bytes 花了 #{((Time.now - t) * 1000).round} ms"
+end
+sha    = $sha
 header = raw[0, 8].unpack1('H*')
 puts "     sha256 = #{sha}"
 puts "     開頭 8 bytes = #{header}   （PNG 應為 89504e470d0a1a0a）"

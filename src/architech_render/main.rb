@@ -16,6 +16,7 @@ module ArchitechRender
     architech_render/capture/passes
     architech_render/capture/session
     architech_render/net/errors
+    architech_render/net/digest_util
     architech_render/net/http_client
     architech_render/net/uploader
     architech_render/net/api_client

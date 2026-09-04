@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'digest'
 require 'json'
 
 module ArchitechRender
@@ -59,7 +58,7 @@ module ArchitechRender
 
       def self.upload_one(path:, url:, &callback)
         raw = File.binread(path)
-        local_digest = Digest::SHA256.hexdigest(raw)
+        local_digest = DigestUtil.hexdigest(raw)
 
         HttpClient.request(
           method: :put,
