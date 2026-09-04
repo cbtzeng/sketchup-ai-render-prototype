@@ -87,13 +87,20 @@ module ArchitechRender
       # 僅在需要把螢幕座標換算成輸出座標時才要用到。
       DEVICE_PIXEL_RATIO = 2.0
 
-      # RenderMode：0 與 1 已確認；2..7 在測試模型上無法區分（單一無貼圖面，
-      # shaded 與 textured 產出相同）。需在有材質的真實場景上重測。
-      RENDER_MODE_WIREFRAME   = 0   # 面不繪製，背景透出，且畫出背面邊線
-      RENDER_MODE_HIDDEN_LINE = 1   # 面以背景色填滿遮擋後方，不畫背面邊線 ← edge pass 用這個
-      RENDER_MODE_SHADED      = 2   # 目前預設值；2/3/4/7 在測試模型上位元組相同
-      RENDER_MODE_MONOCHROME  = 5   # 純白面積最高(12.4%)且相異色數最少(79)，判定為單色，待複驗
-      # 6 = 面呈 237 灰、無純白，用途未明，待複驗
+      # RenderMode —— 已於「貼圖 + 純色 + 預設面 + 立體量體 + 陰影」的場景上目視確認。
+      # 來源：docs/journal/main/004-rendermode-對應.md
+      RENDER_MODE_WIREFRAME   = 0   # 線框，面不繪製
+      RENDER_MODE_HIDDEN_LINE = 1   # 隱藏線：面填「背景色」，黑邊線，無面著色
+      RENDER_MODE_SHADED      = 2   # 著色（含貼圖，貼圖另由 TEXTURE 開關控制）
+      RENDER_MODE_MONOCHROME  = 5   # 單色：面恆為「純白」，黑邊線，無面著色
+      # 3 / 4 / 7 產出的 PNG 與 2 位元組完全相同（在有貼圖的場景上仍相同）→ 視為 2 的別名
+      # 6 = 與 2 相同但整體壓暗約 7%（255→238、129→103），用途未明，本專案不使用
+
+      # edge pass 用 5 而非 1：
+      # mode 1 的面採「背景色」，面與背景同色，輪廓只靠邊線撐著；
+      # mode 5 的面恆為純白，與 BackgroundColor 無關，行為更穩健。
+      # （若把 BackgroundColor 設為白，兩者結果會收斂，但 5 少一個相依。）
+      RENDER_MODE_FOR_EDGE_PASS = 5
 
       # ---- fog：完全線性，可用 ------------------------------------------
       # 12 個標定點（End=60m 與 30m 各 6 點）全部落在 ±0.5 灰階內，

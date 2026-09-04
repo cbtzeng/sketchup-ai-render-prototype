@@ -53,9 +53,9 @@
 | 2.2 | 可列舉所有 key | 🟢 **已實測** | `RenderingOptions` 含 Enumerable，`each_pair` / `each_key` / `keys` / `to_h` 全部可用。共 58 個 key，完整 dump 見 `tools/spike/results/2026-09-04-env-dump.txt` |
 | 2.3 | 控制邊線/面/材質/霧的 key | 🟢 **已實測** | 上述 key 名全部存在，已寫入 `src/architech_render/capture/options_keys.rb`。**兩項修正**：(a) 我先前猜的 `FaceColorMode` **不存在**；(b) `DisplayShadows` 不在 rendering_options，在 `shadow_info`。另：深度暗示的 key 確實是 `DrawDepthQue`（Que 不是 Cue），先前對拼字的懷疑成立 |
 | 2.3b | `FogStartDist` / `FogEndDist` 的 `-1.0` | 🟢 **已實測解決** | 確為 auto 哨兵值，且**可寫入**。開啟 `DisplayFog` 不會自動把它換成計算值。寫入明確距離（英吋）後精確保留，寫回 `-1.0` 可恢復 auto |
-| 2.4 | `RenderMode` 的整數值對應 | 🟡 **部分確定** | **0 = 線框**（面不繪製，畫背面邊線）、**1 = 隱藏線**（面以背景色填滿，不畫背面邊線）← edge pass 用 1。**2/3/4/7 在測試模型上位元組完全相同**（單一無貼圖面，shaded 與 textured 無從區分），5 疑為單色（純白佔比最高、相異色數最少），6 面呈 237 灰、用途未明。**需在有材質的真實場景上複測** |
+| 2.4 | `RenderMode` 的整數值對應 | 🟢 **已實測（目視確認）** | **0**=線框、**1**=隱藏線（面填**背景色**）、**2**=著色含貼圖、**5**=單色（面恆為**純白**）、**6**=同 2 但整體壓暗約 7%。**3/4/7 與 2 位元組完全相同**（在有貼圖的場景上仍相同）→ 視為 2 的別名。貼圖顯示由獨立的 `Texture` 布林控制，不歸 RenderMode 管。**edge pass 用 5 不是 1**，理由見 journal 004 |
 | 2.5 | 改 rendering_options 是否讓 model 變 dirty | 🟢 **已實測：不會** | 進場前 `modified? = false`，跑完 60+ 次 key 寫入與相機移動後仍為 `false`。**你在 Q13 的推測（會變 true）不成立** —— 這是好消息，代表擷取不會讓使用者被問「要儲存嗎」 |
-| 2.6 | 改 rendering_options 是否污染 undo stack | 🟡 **未直接測** | 本次以 `start_operation` + `abort_operation` 包住臨時幾何，`modified?` 未被設起。但**沒有實際按 Ctrl+Z 驗證**。仍需一次手動測試 |
+| 2.6 | 改 rendering_options 是否污染 undo stack | 🟢 **已實測：不會** | 手動測試：畫矩形→改設定→Ctrl+Z，撤銷掉的是**矩形**，顯示設定維持改過的狀態。包在 `start_operation`+`commit_operation` 內結果相同（SketchUp 不為無幾何變更的操作建立 undo 條目）。**推論**：rendering_options 完全在 model transaction 之外，因此 SketchUp 不會幫我們還原任何東西 —— `ensure` 還原是**唯一**防線，不是雙保險。見 journal 005 |
 | 2.7 | snapshot → restore 能否完全還原 | 🟢 **已實測** | 腳本自我驗證「rendering_options 已完全還原」，逐 key 比對無差異，含 Color 與浮點值 |
 | 2.8 | `model.shadow_info`（陰影開關、太陽方向）可存取與還原 | 🟢 | |
 | 2.9 | `model.styles.add_style(path, select)` 可載入 .style 檔 | 🟡 | 我記得存在。但用「打包好的 .style 檔」切換 vs「直接改 rendering_options」哪個更快更乾淨，需實測比較。用 .style 的優點是還原乾淨、行為可預期 |

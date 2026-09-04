@@ -1,0 +1,12 @@
+# RenderMode 補測（有貼圖 + 純色 + 預設面 + 立體量體）
+# 2026-09-04 09:19:07 +0800
+
+進場 RenderMode = 2
+RenderMode=0	寫檔=true	讀回=0	bytes=8196
+RenderMode=1	寫檔=true	讀回=1	bytes=9160
+RenderMode=2	寫檔=true	讀回=2	bytes=41676
+RenderMode=3	寫檔=true	讀回=3	bytes=41676
+RenderMode=4	寫檔=true	讀回=4	bytes=41676
+RenderMode=5	寫檔=true	讀回=5	bytes=8671
+RenderMode=6	寫檔=true	讀回=6	bytes=44758
+RenderMode=7	寫檔=true	讀回=7	bytes=41676
