@@ -469,11 +469,22 @@ module ArchitechRender
       route 'render.cancel' do |_params, _ctx|
         fail!('UI-04', 'nothing to cancel') unless @render
         cancel_render_timer
-        # 🔴 真正的取消要打 POST /v1/jobs/:id/cancel（net/ 尚未實作）。
-        # 目前只停本機輪詢並把面板切回 idle——必須讓使用者知道差別。
+
+        # 停本機輪詢之外，還要通知雲端，否則使用者按了 Cancel、
+        # job 仍會在雲端跑完並計費。best-effort：雲端取消失敗不影響本機收工。
+        server_cancelled = false
+        if cloud_available? && @render[:job_id] && backend.respond_to?(:cancel)
+          begin
+            backend.cancel(@render[:job_id])
+            server_cancelled = true
+          rescue StandardError
+            server_cancelled = false
+          end
+        end
+
         @render[:state] = 'cancelled'
         emit('status', status_payload)
-        { state: 'cancelled', server_cancel: cloud_available? }
+        { state: 'cancelled', server_cancel: server_cancelled }
       end
 
       route 'render.status' do |_params, _ctx|
@@ -647,7 +658,31 @@ module ArchitechRender
         end
 
         set_state('uploading', label: 'Uploading control images')
-        fail!('UI-06', 'net/ uploader is not implemented yet')
+
+        # assets 不在 request 裡（request 是使用者的意圖，assets 是擷取的產物），
+        # 所以在這裡合併。backend 的契約是 submit(request, on_status:, on_done:, on_error:)。
+        paths = @render[:assets].each_with_object({}) { |(k, v), acc| acc[k.to_sym] = v[:path] }
+        payload = @render[:request].merge(assets: paths)
+
+        backend.submit(
+          payload,
+          on_status: lambda do |state:, label: nil, job_id: nil, **extra|
+            @render[:job_id] = job_id if job_id
+            set_state(state, label: label, **extra)
+          end,
+          on_done: lambda do |job|
+            @render[:job_id] = job['id'] if job.is_a?(Hash) && job['id']
+            url = job.is_a?(Hash) ? (job['result_url'] || job.dig('result', 'url')) : nil
+            @render[:result] = { key: 'result', url: url, stub: false, job: job }
+            set_state('succeeded', label: 'Done')
+          end,
+          on_error: lambda do |err|
+            h = err.respond_to?(:to_h) ? err.to_h : { code: 'UI-08', message: err.to_s }
+            fail_render(h[:code] || 'UI-08', h[:message] || 'render failed', h[:detail])
+          end
+        )
+      rescue StandardError => e
+        fail_render('UI-08', e.message, { klass: e.class.name })
       end
 
       # --- 模擬後端（只在 net/ 未實作或不在 SketchUp 內時使用）------------

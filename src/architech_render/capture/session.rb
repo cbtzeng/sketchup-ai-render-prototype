@@ -24,7 +24,11 @@ module ArchitechRender
 
       # out_dir 由呼叫端決定（通常是 Sketchup.temp_dir 底下的一個子目錄）。
       # 回傳 Result；任何一個 pass 失敗都會拋 CaptureError，且設定必已還原。
-      def run(out_dir)
+      #
+      # on_pass 在**每個 pass 開始前**被呼叫，簽名為 (name, index, total)。
+      # 這是同步迴圈，所以 UI 要靠這個回呼才看得到中間進度；
+      # 沒有它面板只會從 1/3 直接跳到 3/3。
+      def run(out_dir, on_pass: nil)
         FileUtils_mkdir_p(out_dir)
 
         paths      = {}
@@ -34,8 +38,9 @@ module ArchitechRender
         t0 = Time.now
 
         ViewState.with_temporary(@model, on_restore_failure: ->(f) { restore_failures = f }) do
-          @passes.each do |pass|
+          @passes.each_with_index do |pass, index|
             name = pass.name
+            on_pass&.call(name, index + 1, @passes.size)
             meta = pass.apply(@model, @view)
             @view.refresh
 

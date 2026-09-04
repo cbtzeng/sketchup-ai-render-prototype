@@ -31,9 +31,17 @@ puts "viewport：#{Sketchup.active_model.active_view.vpwidth.to_i}x#{Sketchup.ac
 puts "modified? 執行前 = #{Sketchup.active_model.modified?}"
 
 puts "\n[1] 載入模組"
-%w[options_keys view_state alignment passes session].each do |f|
-  step(f) { load File.join(AR_ROOT, 'src', 'architech_render', 'capture', "#{f}.rb") }
+{
+  'capture' => %w[options_keys view_state alignment passes session],
+  'net'     => %w[errors http_client uploader api_client poller],
+  'jobs'    => %w[local_index],
+  'ui'      => %w[bridge dialog]
+}.each do |dir, files|
+  files.each do |f|
+    step("#{dir}/#{f}") { load File.join(AR_ROOT, 'src', 'architech_render', dir, "#{f}.rb") }
+  end
 end
+step('net/cloud_backend') { load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'cloud_backend.rb') }
 
 M  = Sketchup.active_model
 V  = M.active_view
@@ -147,6 +155,50 @@ check.call("Session#run 256x256") do
   puts "     三 pass 耗時 #{res.elapsed.round(3)}s"
   print "     "
   true
+end
+
+puts "\n[6] net / jobs / ui（不觸網，只驗邏輯與接線）"
+E  = ArchitechRender::Net::Errors
+LI = ArchitechRender::Jobs::LocalIndex
+
+check.call("錯誤分類：4xx 不重試、5xx 可重試") do
+  raise '400 不該可重試' if E.from_status(400).retryable?
+  raise '500 應該可重試' unless E.from_status(500).retryable?
+  raise '401 應為 NET-22' unless E.from_status(401).code == 'NET-22'
+  raise '200 應回 nil'    unless E.from_status(200).nil?
+  true
+end
+
+check.call("完整性錯誤可重試（可能只是傳輸壞掉）") do
+  E::IntegrityFailed.new('a', 'b').retryable?
+end
+
+check.call("LocalIndex 記錄 → 讀回 → 遺忘（spec F5）") do
+  LI.forget(M, 'test-job-1')
+  LI.record(M, 'test-job-1', prompt: 'hello', scene: 'Scene 1')
+  found = LI.pending(M).find { |e| e['job_id'] == 'test-job-1' }
+  raise '記錄後讀不到' unless found
+  raise "prompt 沒存到：#{found.inspect}" unless found['prompt'] == 'hello'
+  LI.forget(M, 'test-job-1')
+  raise '遺忘後仍讀得到' if LI.pending(M).any? { |e| e['job_id'] == 'test-job-1' }
+  true
+end
+
+check.call("Bridge 已注入 CloudBackend（不是 stub）") do
+  b = ArchitechRender::UI::Bridge.backend
+  raise 'backend 是 nil，會走模擬後端' if b.nil?
+  raise "backend 沒有 submit：#{b.inspect}" unless b.respond_to?(:submit)
+  raise 'backend 沒有 cancel' unless b.respond_to?(:cancel)
+  b.name.split('::').last
+end
+
+check.call("Session 的 on_pass 會逐個回報（spec 2.1 的 1/3 → 2/3 → 3/3）") do
+  seen = []
+  plan = a.plan(V, long_edge: 128, aspect: :square)
+  s.new(M, plan: plan).run(dir, on_pass: ->(name, i, total) { seen << [name, i, total] })
+  raise "回報次數不對：#{seen.inspect}" unless seen.length == 3
+  raise "順序或編號不對：#{seen.inspect}" unless seen.map { |x| x[1] } == [1, 2, 3]
+  seen.map { |x| x[0] }.join(' → ')
 end
 
 puts "\n===== 結果 ====="
