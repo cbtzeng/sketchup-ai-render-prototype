@@ -3,6 +3,33 @@
 面試作業的評分重點是「判斷力」與「誠實度」，不是功能數量。
 所以 MVP 刻意做小，把時間留給**證明論點的評估實驗**——那才是這份作業真正的差異化。
 
+## 已確定的前提（open-questions 回覆後）
+
+| 項目 | 決定 |
+|---|---|
+| 時間盒 | **≤ 2 天** |
+| 交付形式 | **(b) 程式碼 repo + 設計文件 + 評估報告**。不做 RBZ 打包與 demo 影片 |
+| 平台 | SketchUp 2026 / macOS 單一版本 |
+| 金鑰模型 | 平台 key + 固定測試額度 |
+| 雲端 | Vercel |
+| 底模 | SDXL + 多 ControlNet（無偏好，先鎖一組） |
+| 評估規模 | 6 場景 × 2 相機 = 12 shots，A/B/C 各 1 seed = 36 張 |
+| 語意遮罩 | 加分項，文件論述，不進 MVP |
+| su_diffusion 對照 | follow-up issue，第一版不做 |
+
+### 兩天的時間分配
+
+| 時段 | 內容 | 產出 |
+|---|---|---|
+| Day 0 上午 | **可行性尖刺**：fog 標定 + write_image 對齊驗證 | 兩篇 journal，決定架構 |
+| Day 0 下午 | 擷取流程（三 pass + ensure 還原）+ 對齊測試 | 可跑的擷取 |
+| Day 1 上午 | 雲端最小路徑（uploads / jobs / hooks）+ 面板 | 端到端能出一張圖 |
+| Day 1 下午 | 跑 12 shots × 3 條件 + 寫報告 | `eval/report.md` |
+
+**若 Day 0 上午的尖刺失敗**（fog 不可用或對齊做不到），
+立刻改成雙控制（beauty + hidden-line），depth 退為 raytest 量尺。
+不要花時間搶救 fog —— 那不是這份作業要證明的事。
+
 ---
 
 ## 0. 第 0 天：可行性尖刺（Spike，非 MVP 範圍但必須先做）
@@ -33,7 +60,7 @@
 - `jobs` + `job_events` + `assets` 三張表 + RLS。
 
 ### 1.4 評估（MVP 的重點，不可砍）
-- 12 場景 × 3 相機 = 36 shots，條件 A / B / C 各 1 個 seed（共 108 張，先不做 3 seed）。
+- 6 場景 × 2 相機 = 12 shots，條件 A / B / C 各 1 個 seed（共 36 張）。
 - 指標先做兩個：**Edge F-score** 與 **depth Spearman ρ**。
 - 產出 `eval/report.md`，含配對 bootstrap CI 與 A/B/C 三聯圖。
 - **包含 B 組（外部 Canny）**。少了 B 組，整份報告在面試官眼中沒有說服力，因為沒有排除「其實不用進 SketchUp 也做得到」。
@@ -53,7 +80,7 @@
 | ★★ | 兩家 provider 都接，實測 p50/p95 與成本並寫進報告 | 直接回答面試題的「比較成本與延遲」 |
 | ★★ | 消失點角度誤差指標 | 建築客戶最有感的指標 |
 | ★★ | 局部重繪（框選區域 + inpaint，控制圖同步裁切） | 真實工作流常見需求 |
-| ★ | 3 個 seed × 36 shots 的完整跑批 | 提高統計穩健度 |
+| ★ | 補跑多 seed 或擴到 12 場景 | 提高統計穩健度，12 shots 的 CI 偏寬 |
 | ★ | 歷史紀錄存進 model attribute dictionary，跟著 .skp 走 | 產品感 |
 | ★ | 「保真度」單一滑桿到多 controlnet 權重的映射曲線調校 | 產品感，且是 H2 失敗時的解方 |
 
@@ -67,7 +94,7 @@
 | 影片 / walkthrough / 多幀時序一致性 | 完全不同的技術問題 |
 | SketchUp Web 版支援 | 沒有 Ruby API，物理上不可能 |
 | Windows + Mac × 多版本相容矩陣 | 只鎖一個實測過的版本，其他列為未驗證 |
-| Extension Warehouse 上架、數位簽章流程 | 原型手動安裝即可 |
+| RBZ 打包、demo 影片、Extension Warehouse 上架、數位簽章 | 交付形式已定為 (b)，這些不佔時間 |
 | 金流、訂閱、credit 系統 | 原型用固定額度 |
 | 使用者帳號系統（註冊/登入/找回密碼） | 用 device id 或單一測試帳號，見 Q4 |
 | 多語系 | 英文 UI |

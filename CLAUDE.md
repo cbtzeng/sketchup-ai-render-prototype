@@ -15,6 +15,12 @@
 ## 文件語言
 繁體中文，技術名詞保留英文。
 
+## Skills
+
+- `worktree` —— 開隔離開發環境，會一併建立 `docs/journal/<branch>/`
+- `sketchup-api-verify` —— **碰 SketchUp Ruby API 之前必讀**，含實機驗證腳本
+- `control-map-eval` —— 評估設計與統計，含「B 組不可省略」的理由
+
 ## 目錄
 - `docs/` 規劃文件
 - `eval/` 評估場景與報告
