@@ -34,9 +34,11 @@
 | 1.4 | **當要求的寬高比 ≠ viewport 寬高比時，畫面如何處理（裁切 / 加黑邊 / 重新取景）** | 🔴 | **最高風險項**。若處理方式不可預期，三個 pass 之間可能不像素對齊，整個論點就垮了。必須實測 |
 | 1.5 | `Sketchup::Camera#aspect_ratio=` 可鎖定寬高比（0 = 跟隨 viewport） | 🟡 | API 我確定存在；但它是否足以讓 1.4 變成完全確定的行為，需實測 |
 | 1.6 | `:transparent => true` 是否支援、與 fog/天空的互動 | 🔴 | 我不確定，需實測 |
-| 1.7 | 改完 rendering_options 後是否需要 `view.refresh` / `invalidate` 才會反映在 write_image | 🔴 | 這是常見坑。若需要，可能還得等一個 timer tick，會拉長擷取時間 |
+| 1.7 | 改完 rendering_options 後是否需要 `view.refresh` / `invalidate` | 🟡 | `View` 同時有 `refresh` 與 `invalidate`（已實測存在），另有 `average_refresh_time` / `last_refresh_time` 可直接量測重繪耗時。**是否必要仍待 Task 0.2 驗證**，但工具齊全 |
 | 1.8 | 三個 pass 在 1024×1024 的總耗時 | 🔴 | 直接決定 spec 的 p50 ≤ 3s 是否可達 |
 | 1.9 | 邊線寬度以 px 計，導致高解析度下線相對變細 | 🟡 | 若成立，edge pass 的線寬需隨解析度調整，否則 ControlNet 吃到的線稿密度不一致 |
+| 1.10 | **`View#device_width` / `device_height` 與 `vpwidth` / `vpheight` 並存** | 🔴 新發現 | dump 顯示 View 同時有這兩組方法。Retina 螢幕上 device 尺寸可能是 vp 的 2 倍（本機 vpwidth=1512）。**這直接影響像素對齊**：若 `write_image` 的座標基準是 device 而非 vp，算出的輸出尺寸會差一倍。Task 0.2 必須同時印出兩組數字 |
+| 1.11 | `Camera#fov_is_height?` 存在 | 🟢 **已實測** | 決定 FOV 以高還是以寬量測 —— 正是寬高比改變時取景怎麼變的關鍵。dump 當前 `fov = 35.0`、`aspect_ratio = 0.0`（0 = 跟隨 viewport，先前 🟡 的猜測成立） |
 
 **替代方案（若 write_image 有致命問題）**：`view.write_image` 之外沒有其他官方離螢幕出圖途徑。
 真的不行只能退回抓 viewport 尺寸出圖，犧牲解析度自由度。
@@ -48,8 +50,9 @@
 | # | 項目 | 信心 | 說明 |
 |---|---|---|---|
 | 2.1 | `model.rendering_options` 回傳 `Sketchup::RenderingOptions`，用 `[]` / `[]=` 存取字串 key | 🟢 | |
-| 2.2 | 可列舉所有 key（`keys` / `each_key` / `each_pair` 之類） | 🟡 | 我確定「可以列舉」，但不敢保證方法名。**驗證腳本第一件事就是把 keys 全部 dump 出來**，之後所有 key 一律以 dump 結果為準 |
-| 2.3 | 存在控制邊線/面/材質顯示的 key（`RenderMode`、`EdgeDisplayMode`、`Texture`、`DrawSilhouettes`、`DisplayFog`、`FogColor`、`FogStartDist`、`FogEndDist`、`FogUseBkColor` 等） | 🟡 | 這些 key 名我印象中正確，但**不要直接寫進程式**，以 2.2 的 dump 為準。SketchUp 有些 key 拼字不直覺（例如深度暗示相關的 key 歷史上有拼字瑕疵），硬猜會踩雷 |
+| 2.2 | 可列舉所有 key | 🟢 **已實測** | `RenderingOptions` 含 Enumerable，`each_pair` / `each_key` / `keys` / `to_h` 全部可用。共 58 個 key，完整 dump 見 `tools/spike/results/2026-09-04-env-dump.txt` |
+| 2.3 | 控制邊線/面/材質/霧的 key | 🟢 **已實測** | 上述 key 名全部存在，已寫入 `src/architech_render/capture/options_keys.rb`。**兩項修正**：(a) 我先前猜的 `FaceColorMode` **不存在**；(b) `DisplayShadows` 不在 rendering_options，在 `shadow_info`。另：深度暗示的 key 確實是 `DrawDepthQue`（Que 不是 Cue），先前對拼字的懷疑成立 |
+| 2.3b | **`FogStartDist` / `FogEndDist` 預設值皆為 `-1.0`** | 🔴 新發現 | 強烈暗示這是「auto（由模型範圍自動計算）」的哨兵值。**若是如此，設定明確距離時的行為會與 UI 滑桿完全不同**，Task 0.3 必須先確認這件事再標定 |
 | 2.4 | `RenderMode` 的整數值對應哪個顯示模式（wireframe / hidden line / shaded / textured / monochrome） | 🔴 | 我不確定精確映射，需實測列舉 |
 | 2.5 | 改 rendering_options 是否會把 model 標成 dirty（造成關檔時跳「要儲存嗎」） | 🔴 | 若會，即使還原也可能留下 dirty flag，需驗證能否用 `start_operation(..., transparent)` 或其他方式規避 |
 | 2.6 | 改 rendering_options 是否會污染 undo stack | 🔴 | 同上，使用者按 Ctrl+Z 應該回到自己的編輯，不該撤銷我們的擷取步驟 |
@@ -64,7 +67,7 @@
 | # | 項目 | 信心 | 說明 |
 |---|---|---|---|
 | 3.1 | **Ruby API 沒有任何方式讀取 GPU depth buffer / z-buffer** | 🟢 | 這就是為什麼要用 fog 當 workaround。這一點我很確定 |
-| 3.2 | fog 相關的 rendering_options key 存在且可程式化開關與設色 | 🟡 | 見 2.3，以 dump 為準 |
+| 3.2 | fog 相關的 rendering_options key 存在且可程式化開關與設色 | 🟢 **已實測** | `DisplayFog` / `FogColor` / `FogStartDist` / `FogEndDist` / `FogUseBkColor` 五個 key 全部存在。但見 2.3b：預設值 -1.0 的語意未明 |
 | 3.3 | `FogStartDist` / `FogEndDist` 的**單位與座標意義**（模型單位？相機距離？沿視線還是歐氏距離？） | 🔴 | 不確定。SketchUp UI 上的 fog 是滑桿，API 是距離值，兩者映射我不敢保證 |
 | 3.4 | **fog 的衰減是線性還是指數** | 🔴 | **決定成敗**。若是指數，灰階值 ≠ 線性深度，必須標定成查表函數，否則餵給 ControlNet 的是被扭曲的深度 |
 | 3.5 | fog 是否同時作用於邊線、面、背景/天空 | 🔴 | 若背景不吃 fog，遠景會出現不連續的深度斷層 |
@@ -97,8 +100,8 @@
 |---|---|---|---|
 | 5.1 | `Sketchup::Http::Request`（SU2017+）非同步、callback 在主執行緒 | 🟢 | |
 | 5.2 | 是否支援 binary body / multipart 上傳圖檔 | 🔴 | **需實測**。若不支援，改用「雲端發簽名 URL → PUT raw bytes」，或退回 `net/http` |
-| 5.3 | 可設 headers、可設逾時 | 🟡 | headers 確定可以；逾時設定我不確定 |
-| 5.4 | Ruby stdlib `net/http` + OpenSSL 在 SketchUp 內可用（HTTPS） | 🟡（風險已降低） | 已確認 app bundle 內隨附 OpenSSL 3.1.0 與 stdlib，Ruby 3.2.2。仍需實測憑證鏈是否能驗證成功，但可用性大幅提高 —— 這讓「Sketchup::Http 不支援 binary body」不再是致命問題 |
+| 5.3 | 可設 headers、可設逾時 | 🟢/🔴 **已實測** | `Request` 的方法為 `[:body, :body=, :cancel, :headers, :headers=, :method=, :set_download_progress_callback, :set_upload_progress_callback, :start, :status, :url]`。headers 可設 ✓；**沒有任何逾時設定方法** ✗ → 逾時要靠 `UI.start_timer` 自行計時後呼叫 `cancel`。`Sketchup::Http` 常數含 PUT / POST 與 STATUS_* |
+| 5.4 | Ruby stdlib `net/http` + OpenSSL 可用（HTTPS） | 🔴 **修正：不能直接用** | `require` 成功（OpenSSL gem 3.1.0 / library 3.4.1），但 **`OpenSSL::X509::DEFAULT_CERT_FILE` 指向打包機器路徑 `/Volumes/X10_Pro/conan1/...`，該檔在使用者機器上不存在**，預設憑證驗證會失敗。**解法已確認可行**：顯式傳 `ca_file`。來源有二 —— macOS 的 `/etc/ssl/cert.pem`（6263 行，存在），或 SketchUp 自帶的 `SketchUp.app/Contents/Resources/Tools/cacert.pem`（存在）。**後者較安全，不依賴使用者系統狀態**。我先前說「幾乎可以確定能用」是錯的 —— 能用，但不指定 CA 會靜默失敗在 TLS 握手 |
 | 5.5 | 企業 proxy / 憑證攔截環境下的行為 | 🔴 | 原型可先不管，但要記為已知限制 |
 
 ---

@@ -165,7 +165,18 @@ Ruby Console 位置：**Extensions → Developer → Ruby Console**
 
 請 dump 出來整份貼回。之後所有 key 名一律以這份為準——我不會憑印象寫 key。
 
-**答：先告訴我怎麼取得**
+**答：✅ 已完成。**完整 dump 見 `tools/spike/results/2026-09-04-env-dump.txt`（已入版控），
+key 名已寫進 `src/architech_render/capture/options_keys.rb`。
+
+重點：`RenderingOptions` 含 Enumerable，`each_pair` 可用，共 **58 個 key**。
+
+**兩項修正**：`FaceColorMode` 不存在（我先前猜錯，已在 options_keys.rb 中記錄避免重蹈）；
+`DisplayShadows` 在 `shadow_info` 而非 rendering_options。`DrawDepthQue` 的拼字瑕疵確認為真。
+
+**兩項新發現需追查**：`FogStartDist` / `FogEndDist` 預設皆為 `-1.0`（疑為 auto 哨兵值）；
+`View` 同時有 `device_width/height` 與 `vpwidth/height`（Retina 倍率，直接影響像素對齊）。
+
+原本的取得方式（保留供參）：
 
 ```
 （貼在這裡）
