@@ -1,0 +1,20 @@
+# eval/ 的相依。刻意保持極小。
+#
+# 實作時全部只用 numpy + 標準庫：
+#   - PNG 解碼重用 tools/analysis/png_probe.py（純標準庫 + numpy）
+#   - Canny 自行實作（沒有 opencv）
+#   - Spearman = rank + Pearson，自行實作（沒有 scipy）
+#   - bootstrap 用 numpy.random.default_rng
+#
+# 沒有列 scipy / opencv-python / Pillow 是刻意的：
+# 為了讀一張 PNG 或算一個秩相關而背上這些相依不划算，
+# 而且評估環境越小越容易重現。
+#
+# 尚未涵蓋（Phase 4 實跑時才會需要，屆時再決定要不要進這個檔）：
+#   - 單目深度估計模型（MiDaS 類）本身
+#   - LSD 線段偵測（spec 4.3 指標 3，消失點誤差，加分項）
+
+numpy>=1.24
+
+# 僅測試需要
+pytest>=7.0
