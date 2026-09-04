@@ -19,6 +19,16 @@ Phase 0 的結論（動工前必讀）：
 4. **評估設計不可省略 B 組（外部 Canny 對照）。** 少了它就無法證明核心論點。
 5. **不要在 prompt 或參數上做未記錄的變動。** 評估的內部效度依賴變因鎖死。
 
+## 測試
+
+唯一入口是 `test/run_tests_staged.rb`，在 SketchUp 的 Ruby Console 用 `load` 執行。
+
+**不要引入 minitest 的 runner。** 實測 `Minitest.run` 會在 SketchUp 內掛住
+（`load_plugins` 掃 `$LOAD_PATH` 找 plugin 檔），而且卡住時完全看不出卡在哪。
+另外 SketchUp 的 `$stdout` 是 `Sketchup::Console`，其 `puts` 為 private method，
+minitest 的 reporter 對它呼叫 `io.puts` 會直接拋 NoMethodError。
+現行 runner 自己跑迴圈、每步先 print 再執行，並附每步耗時。
+
 ## 文件語言
 繁體中文，技術名詞保留英文。
 

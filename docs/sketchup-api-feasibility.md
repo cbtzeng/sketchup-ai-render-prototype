@@ -89,7 +89,8 @@
 | 4.1 | `UI::HtmlDialog`（SU2017+，Chromium 核心），`add_action_callback` / `execute_script` / `set_file` | 🟢 | 舊的 `UI::WebDialog` 已棄用，不用 |
 | 4.2 | `UI.start_timer(seconds, repeat) { }` / `UI.stop_timer(id)` 可做輪詢 | 🟢 | 這是 SketchUp 沒有背景執行緒時做非同步的標準手法 |
 | 4.3 | Ruby 跑在主 UI 執行緒，長操作會凍結 SketchUp | 🟢 | 所有設計都要遷就這一點 |
-| 4.4 | HtmlDialog ↔ Ruby 傳遞大字串（base64 預覽圖）的大小上限與效能 | 🔴 | 若上限低或很慢，預覽圖要改走 `file://` 或本機暫存檔路徑而非 base64 |
+| 4.4 | HtmlDialog ↔ Ruby 傳遞大字串的大小上限與效能 | 🔴 待測 | 下一個尖刺項目 |
+| 4.6 | **在 SketchUp 內跑測試框架** | 🟢 **已實測（負面結果）** | `Minitest.run` 會掛住 SketchUp（`load_plugins` 掃 `$LOAD_PATH`）。且 `$stdout` 是 `Sketchup::Console`，`puts` 為 private，minitest reporter 呼叫 `io.puts` 會拋 NoMethodError。**結論：不用 minitest**，自寫逐步 runner |
 | 4.5 | `Sketchup.temp_dir` 可取得暫存目錄 | 🟢 **已實測** | 回傳 `/var/folders/.../T/com.sketchup.SketchUp.2026.benson`。不需要 `Dir.tmpdir` fallback |
 
 ---
