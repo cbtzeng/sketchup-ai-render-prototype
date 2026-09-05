@@ -47,6 +47,18 @@ module ArchitechRender
         File.executable?(python_bin)
       end
 
+      # 成品根目錄。放 Documents 而不是 temp —— 見 submit 內的說明。
+      def output_root
+        File.join(Dir.home, 'Documents', 'ArchitechRender')
+      end
+
+      def mkdir_p(dir)
+        return if File.directory?(dir)
+        parent = File.dirname(dir)
+        mkdir_p(parent) unless File.directory?(parent) || parent == dir
+        Dir.mkdir(dir)
+      end
+
       # fidelity 滑桿（0..1）→ ControlNet 權重。
       #
       # 只給使用者一個旋鈕是刻意的（spec 2.1）：兩個獨立權重會讓人不知道從何調起。
@@ -106,8 +118,15 @@ module ArchitechRender
           return on_error.call(Errors::Base.new('缺少 beauty pass，無法生成', code: 'GEN-02'))
         end
 
-        job_dir = File.join(Sketchup.temp_dir, "architech_gen_#{Time.now.to_i}")
-        Dir.mkdir(job_dir) unless File.directory?(job_dir)
+        # 成品放在使用者找得到、而且不會被系統清掉的地方。
+        #
+        # 先前放 Sketchup.temp_dir，那是 /var/folders/<亂碼>/T/... ——
+        # Finder 預設不顯示，路徑是一串雜湊，而且 macOS 會自動清理。
+        # 使用者跑了 60 秒的成品，重開機可能就沒了。
+        #
+        # 資料夾名用可讀的時間戳而不是 epoch，這樣按時間排序就是按產出順序。
+        job_dir = File.join(output_root, Time.now.strftime('%Y-%m-%d_%H%M%S'))
+        mkdir_p(job_dir)
 
         plan     = request[:plan] || {}
         fidelity = request[:fidelity] || 0.6
