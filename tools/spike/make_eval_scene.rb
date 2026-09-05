@@ -85,12 +85,23 @@ module ArchitechScene
           Geom::Point3d.new(x0 + w,  front_y, z0 + h),
           Geom::Point3d.new(x0,      front_y, z0 + h)
         )
-        if win && win.respond_to?(:pushpull)
-          win.pushpull(-0.35 * M)
-          # 凹進去之後，原本那個面變成窗洞的底 —— 給它玻璃色，
-          # 這樣 beauty 有明顯的明暗對比，開口數量也數得出來。
-          win.material = mat_glass
+        next unless win
+
+        # ⚠️ pushpull 會**刪掉原本那個面** —— 它不是「把面推進去」，
+        # 而是建立新幾何並取代原面。在 pushpull 之後對它設材質會拋
+        # TypeError: reference to deleted DrawingElement。
+        #
+        # 所以順序是：先上材質（新幾何會繼承），再 pushpull，
+        # 最後用 valid? 守衛（有些情況原面會留著）。
+        win.material = mat_glass
+        if win.respond_to?(:pushpull)
+          begin
+            win.pushpull(-0.35 * M)
+          rescue StandardError
+            # 窗洞挖失敗不該讓整個場景生不出來 —— 平面的窗戶仍有顏色對比
+          end
         end
+        win.material = mat_glass if win.valid?
       end
     end
 
