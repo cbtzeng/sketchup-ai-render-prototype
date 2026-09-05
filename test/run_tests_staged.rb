@@ -10,6 +10,17 @@
 
 AR_ROOT = File.expand_path('..', File.dirname(__FILE__)) unless defined?(AR_ROOT)
 
+# runner 刻意從 repo 路徑重載，好吃到剛編輯的內容。但外掛已從 Plugins 的
+# 符號連結載過同一份檔案，Ruby 視為不同檔案而對每個常數發出重複定義警告
+# （幾十行，把真正的訊息淹掉）。重載是我們要的行為，所以壓掉警告而非跳過載入。
+def quietly
+  old = $VERBOSE
+  $VERBOSE = nil
+  yield
+ensure
+  $VERBOSE = old
+end
+
 def step(label)
   print "  → #{label} ... "
   t = Time.now
@@ -38,14 +49,22 @@ puts "\n[1] 載入模組"
   'ui'      => %w[bridge dialog]
 }.each do |dir, files|
   files.each do |f|
-    step("#{dir}/#{f}") { load File.join(AR_ROOT, 'src', 'architech_render', dir, "#{f}.rb") }
+    step("#{dir}/#{f}") { quietly { load File.join(AR_ROOT, 'src', 'architech_render', dir, "#{f}.rb") }; 'OK' }
   end
 end
-step('net/cloud_backend') { load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'cloud_backend.rb') }
-step('net/local_backend')  { load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'local_backend.rb') }
-step('config')            { load File.join(AR_ROOT, 'src', 'architech_render', 'config.rb') }
+step('net/cloud_backend') { quietly { load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'cloud_backend.rb') }; 'OK' }
+step('net/local_backend')  { quietly { load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'local_backend.rb') }; 'OK' }
+step('config')            { quietly { load File.join(AR_ROOT, 'src', 'architech_render', 'config.rb') }; 'OK' }
 step('套用 config')        { ArchitechRender::Config.apply!; ArchitechRender::Config.summary[:http_backend] }
-step('注入 CloudBackend')  { ArchitechRender::UI::Bridge.backend = ArchitechRender::Net::CloudBackend; 'ok' }
+# 重現 main.rb 的選擇邏輯，而不是硬塞一個 backend。
+# 先前這裡寫死 CloudBackend，導致下方「Bridge 注入的是可用的後端」
+# 驗的是測試自己剛設的值 —— 測試在對自己說謊，正式環境用哪個完全沒被驗到。
+step('選擇 backend（同 main.rb）') do
+  b = ArchitechRender::Net::LocalBackend.available? ?
+        ArchitechRender::Net::LocalBackend : ArchitechRender::Net::CloudBackend
+  ArchitechRender::UI::Bridge.backend = b
+  b.name.split('::').last
+end
 
 M  = Sketchup.active_model
 V  = M.active_view
@@ -218,6 +237,10 @@ check.call("完整性錯誤可重試（可能只是傳輸壞掉）") do
 end
 
 check.call("LocalIndex 記錄 → 讀回 → 遺忘（spec F5）") do
+  # 這一項會寫 model 的 attribute dictionary，本來就會把 model 標成 dirty ——
+  # 那是 LocalIndex 的正常行為（job 要跟著 .skp 走）。
+  # 記下進場前的狀態，結尾才知道 dirty 是這一項造成的、不是擷取造成的。
+  $li_modified_before = M.modified?
   LI.forget(M, 'test-job-1')
   LI.record(M, 'test-job-1', prompt: 'hello', scene: 'Scene 1')
   found = LI.pending(M).find { |e| e['job_id'] == 'test-job-1' }
@@ -260,8 +283,8 @@ end
 
 check.call("Session 的 on_pass 會逐個回報（spec 2.1 的 1/3 → 2/3 → 3/3）") do
   seen = []
-  plan = a.plan(V, long_edge: 128, aspect: :square)
-  s.new(M, plan: plan).run(dir, on_pass: ->(name, i, total) { seen << [name, i, total] })
+  plan = AL.plan(V, long_edge: 128, aspect: :square)
+  SE.new(M, plan: plan).run(dir, on_pass: ->(name, i, total) { seen << [name, i, total] })
   raise "回報次數不對：#{seen.inspect}" unless seen.length == 3
   raise "順序或編號不對：#{seen.inspect}" unless seen.map { |x| x[1] } == [1, 2, 3]
   seen.map { |x| x[0] }.join(' → ')
