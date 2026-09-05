@@ -141,11 +141,22 @@ module ArchitechRender
         # 用 shell 的 & 把行程丟到背景，system 立刻返回。
         # 不用 Process.spawn 是因為它在 SketchUp 內的行為未經驗證，
         # 而 shell 背景化是最保守可靠的做法。
+        # 啟動新的之前先收掉舊的。
+        #
+        # 這一步是實測踩到的：面板報錯或使用者重按 Render 時，
+        # 上一個 Python 行程仍在背景跑。實際看到過 4 個行程同時存在，
+        # 而 MPS 是統一記憶體 —— 那正是先前害機器重開的情境。
+        # 「使用者看不到它了」不等於「它停了」。
+        reap_previous
+
         log = File.join(job_dir, 'run.log')
+        # 把 pid 寫進檔案，這樣即使 Ruby 這邊的狀態丟了也收得回來。
+        pid_file = File.join(job_dir, 'pid')
         cmd = "cd #{sh(repo_root)} && PYTORCH_ENABLE_MPS_FALLBACK=1 " \
               "#{sh(python_bin)} -m eval.generate_one #{sh(spec_path)} " \
-              "> #{sh(log)} 2>&1 &"
+              "> #{sh(log)} 2>&1 & echo $! > #{sh(pid_file)}"
         system(cmd)
+        @current_pid_file = pid_file
 
         on_status.call(state: 'running', label: '啟動本機生成…')
         poll(spec[:status], spec[:output], log, Time.now, on_status, on_done, on_error)
@@ -159,6 +170,7 @@ module ArchitechRender
 
             if elapsed > TIMEOUT_SECONDS
               ::UI.stop_timer(timer)
+              reap_previous   # 逾時不代表它停了，要真的殺掉
               next on_error.call(Errors::Timeout.new("本機生成逾時（#{TIMEOUT_SECONDS}s）"))
             end
 
@@ -181,6 +193,7 @@ module ArchitechRender
                            'device' => st['device'])
             when 'failed'
               ::UI.stop_timer(timer)
+              reap_previous
               detail = st['traceback'] || tail(log_path)
               on_error.call(Errors::Base.new(st['label'] || '生成失敗',
                                              code: 'GEN-10', detail: { trace: detail }))
@@ -210,10 +223,31 @@ module ArchitechRender
         nil
       end
 
-      # 本機生成沒有雲端 job 可以取消。停止輪詢由 bridge 負責，
-      # 已經啟動的 Python 行程會自己跑完 —— 那是本機資源，不計費。
-      def cancel(_job_id)
-        false
+      # 收掉先前留下的生成行程。
+      #
+      # 找的是「這個 repo 底下的 eval.generate_one」，不是所有 python ——
+      # 使用者可能有自己的 Python 工作在跑，誤殺別人的行程是不可接受的。
+      def reap_previous
+        pattern = "#{python_bin} -m eval.generate_one"
+        out = `pgrep -f #{sh(pattern)} 2>/dev/null`.to_s.split("\n")
+        out.each do |pid|
+          next if pid.strip.empty?
+          begin
+            Process.kill('TERM', pid.strip.to_i)
+          rescue StandardError
+            # 已經結束了就算了
+          end
+        end
+        out.size
+      rescue StandardError
+        0
+      end
+
+      # 本機生成沒有雲端 job 可取消，但**行程要真的殺掉**。
+      # 先前這裡回 false 什麼都不做，結果使用者按 Cancel 或面板報錯後，
+      # Python 仍在背景吃記憶體。
+      def cancel(_job_id = nil)
+        reap_previous.positive?
       end
 
       def sh(str)
