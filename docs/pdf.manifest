@@ -66,3 +66,19 @@ docs/journal/**/[0-9]*.md
 ---
 ## 八、評估結果
 eval/report.md
+
+[profile:collaboration]
+title: 協作報告 — 與 AI 共同開發 SketchUp 渲染外掛
+subtitle: 判斷分歧、引導過程，以及一個推翻自己論點的實驗
+author: cbtzeng
+
+docs/COLLABORATION_REPORT.md
+---
+## 附錄一：對本方案的反駁（規劃階段產出）
+docs/critique.md
+---
+## 附錄二：決策紀錄
+docs/journal/**/[0-9]*.md
+---
+## 附錄三：評估結果
+eval/report.md
