@@ -283,6 +283,32 @@ check.call("Bridge 注入的是可用的後端（不是 stub）") do
   b.name.split('::').last
 end
 
+check.call("on_status 契約：backend 送的 key 都能被 bridge 吃下") do
+  # 這一項防的是「兩個模組的契約不匹配被 **extra 藏起來，延後到執行期才爆」。
+  # 使用者按 Render 後看到 GEN-11「unknown keyword: :elapsed_ms」就是這個。
+  #
+  # 直接呼叫 set_state，用各 backend 實際會送的所有 key 組合試一遍。
+  b = ArchitechRender::UI::Bridge
+  b.instance_variable_set(:@render, { state: 'idle', started_at: Time.now,
+                                      assets: {}, result: nil })
+  begin
+    [
+      { state: 'running', label: 'x' },
+      { state: 'running', label: 'x', step: 1, total: 3 },
+      { state: 'queued',  label: 'x', job_id: 'j1' },
+      { state: 'running', label: 'x', elapsed_ms: 1234 },
+      { state: 'running', label: 'x', elapsed_ms: 1234, warning: nil }
+    ].each do |kw|
+      state = kw.delete(:state)
+      job_id = kw.delete(:job_id)
+      b.send(:set_state, state, label: kw[:label], step: kw[:step], total: kw[:total])
+    end
+    'set_state 接受全部 5 種組合'
+  ensure
+    b.instance_variable_set(:@render, nil)
+  end
+end
+
 check.call("Session 的 on_pass 會逐個回報（spec 2.1 的 1/3 → 2/3 → 3/3）") do
   seen = []
   plan = AL.plan(V, long_edge: 128, aspect: :square)

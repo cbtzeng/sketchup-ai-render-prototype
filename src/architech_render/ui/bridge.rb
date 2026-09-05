@@ -678,7 +678,18 @@ module ArchitechRender
           payload,
           on_status: lambda do |state:, label: nil, job_id: nil, **extra|
             @render[:job_id] = job_id if job_id
-            set_state(state, label: label, **extra)
+
+            # 只轉發 set_state 真的接受的 key，不要盲目 splat。
+            #
+            # 這裡原本是 `set_state(state, label: label, **extra)`，
+            # backend 一旦多送一個 key（例如 elapsed_ms）就會拋
+            # ArgumentError: unknown keyword，而且是在使用者按下 Render
+            # 之後才爆 —— 兩個模組的契約不匹配被 **extra 藏起來，延後到執行期。
+            #
+            # elapsed_ms 不需要轉發：status_payload 自己從 @render[:started_at]
+            # 算，backend 送來的那份是多餘的。
+            set_state(state, label: label,
+                      step: extra[:step], total: extra[:total])
           end,
           on_done: lambda do |job|
             @render[:job_id] = job['id'] if job.is_a?(Hash) && job['id']
