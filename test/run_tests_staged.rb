@@ -42,6 +42,7 @@ puts "\n[1] 載入模組"
   end
 end
 step('net/cloud_backend') { load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'cloud_backend.rb') }
+step('net/local_backend')  { load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'local_backend.rb') }
 step('config')            { load File.join(AR_ROOT, 'src', 'architech_render', 'config.rb') }
 step('套用 config')        { ArchitechRender::Config.apply!; ArchitechRender::Config.summary[:http_backend] }
 step('注入 CloudBackend')  { ArchitechRender::UI::Bridge.backend = ArchitechRender::Net::CloudBackend; 'ok' }
@@ -59,6 +60,38 @@ check = lambda do |label, &blk|
   ok = step(label, &blk)
   fails << label if ok == :failed || ok == false
   ok
+end
+
+
+puts "\n[0] 靜態檢查（不需要 SketchUp 狀態）"
+check.call("沒有裸的 UI. 呼叫（會被 ArchitechRender::UI 遮蔽）") do
+  # ArchitechRender::UI 會在外掛的詞法範圍內遮蔽 SketchUp 的頂層 ::UI。
+  # 寫 UI.start_timer 會解析到我們自己的模組並拋
+  # NoMethodError: undefined method `start_timer' for ArchitechRender::UI:Module。
+  #
+  # 這個錯誤只在**執行到那一行**才會出現 —— 對 net/ 這種
+  # 「只有真的送出請求才會跑到」的程式碼，等於要到使用者按下 Render
+  # 才炸。所以用靜態掃描擋在載入期。
+  offenders = []
+  Dir.glob(File.join(AR_ROOT, 'src', '**', '*.rb')).each do |f|
+    File.readlines(f).each_with_index do |line, i|
+      next if line.strip.start_with?('#')          # 註解
+      code = line.sub(/#.*$/, '')                  # 去掉行末註解
+      code = code.gsub(/'[^']*'|"[^"]*"/, '')      # 去掉字串字面值
+      next unless code =~ /(?<![:\w.])UI\.(start_timer|stop_timer|messagebox|openURL)\b/
+      offenders << "#{File.basename(f)}:#{i + 1}"
+    end
+  end
+  raise "發現裸的 UI. 呼叫：#{offenders.join(', ')}" unless offenders.empty?
+  "掃描 #{Dir.glob(File.join(AR_ROOT, 'src', '**', '*.rb')).size} 個檔案，無違規"
+end
+
+check.call("LocalBackend 的 repo_root 能穿透符號連結") do
+  lb = ArchitechRender::Net::LocalBackend
+  root = lb.repo_root
+  raise "repo_root 不對：#{root}" unless File.directory?(File.join(root, 'eval'))
+  raise "找不到 python：#{lb.python_bin}" unless lb.available?
+  root
 end
 
 puts "\n[2] ViewState"
@@ -195,7 +228,29 @@ check.call("LocalIndex 記錄 → 讀回 → 遺忘（spec F5）") do
   true
 end
 
-check.call("Bridge 已注入 CloudBackend（不是 stub）") do
+check.call("本機生成環境存在") do
+  lb = ArchitechRender::Net::LocalBackend
+  raise "找不到 #{lb.python_bin}" unless lb.available?
+  "python = #{lb.python_bin}"
+end
+
+check.call("fidelity 映射到 ControlNet 權重") do
+  lb = ArchitechRender::Net::LocalBackend
+  lo = lb.weights_for(0.0)
+  hi = lb.weights_for(1.0)
+  raise "低保真的權重不該比高保真大：#{lo.inspect} vs #{hi.inspect}" unless hi[:edge] > lo[:edge] && hi[:depth] > lo[:depth]
+  "0.0→#{lo.inspect}  1.0→#{hi.inspect}"
+end
+
+check.call("fidelity 也要調 denoise（低保真=更有創意）") do
+  lb = ArchitechRender::Net::LocalBackend
+  creative = lb.denoise_for(0.0)
+  faithful = lb.denoise_for(1.0)
+  raise "低保真的 denoise 應該較高：#{creative} vs #{faithful}" unless creative > faithful
+  "Creative #{creative} → Faithful #{faithful}"
+end
+
+check.call("Bridge 注入的是可用的後端（不是 stub）") do
   b = ArchitechRender::UI::Bridge.backend
   raise 'backend 是 nil，會走模擬後端' if b.nil?
   raise "backend 沒有 submit：#{b.inspect}" unless b.respond_to?(:submit)

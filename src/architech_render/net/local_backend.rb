@@ -1,0 +1,218 @@
+# frozen_string_literal: true
+
+require 'json'
+
+module ArchitechRender
+  module Net
+    # 本機生成後端。實作 ui/bridge.rb 要求的
+    # submit(request, on_status:, on_done:, on_error:) 契約。
+    #
+    # 為什麼不走雲端：雲端層的 Supabase adapter 尚未實作，
+    # 而且部署它對「外掛能不能出圖」沒有幫助 —— 生成能力在本機已經驗證可用。
+    # CloudBackend 保留著，之後接上 adapter 就能切換。
+    #
+    # 跨行程的做法：Ruby 用 shell 把 Python 丟到背景，
+    # 然後用 UI.start_timer 定期讀一個狀態檔。
+    #
+    # 為什麼不用執行緒或管線：SketchUp 的 Ruby 跑在主 UI 執行緒，
+    # 沒有可靠的方式讀取子行程的即時輸出。**檔案是這兩個世界之間
+    # 最不會出錯的介面** —— 寫入端用 rename 保證原子性，讀取端
+    # 讀到壞掉的 JSON 就當作「還沒好」再等一輪。
+    module LocalBackend
+      module_function
+
+      POLL_SECONDS   = 1.0
+      TIMEOUT_SECONDS = 600   # 首次載入模型可能要一分鐘，給寬鬆一點
+
+      # 外掛是從 Plugins 目錄的**符號連結**載入的（tools/install_dev.sh 建立），
+      # 所以 File.dirname(__FILE__) 給的是 Plugins 路徑，往上三層會變成
+      # 「.../SketchUp」而不是 repo —— 於是找不到 .venv-gen，
+      # available? 回 false，整個退回未部署的雲端後端。
+      #
+      # realpath 先把符號連結解開，才拿得到真正的 repo 位置。
+      def repo_root
+        real = begin
+          File.realpath(__FILE__)
+        rescue StandardError
+          File.expand_path(__FILE__)
+        end
+        File.expand_path('../../..', File.dirname(real))
+      end
+
+      def python_bin
+        File.join(repo_root, '.venv-gen', 'bin', 'python')
+      end
+
+      def available?
+        File.executable?(python_bin)
+      end
+
+      # fidelity 滑桿（0..1）映射到 ControlNet 權重。
+      #
+      # 只給使用者一個旋鈕是刻意的（spec 2.1）：兩個獨立權重會讓人不知道從何調起。
+      # edge 的權重範圍比 depth 高，因為邊線對結構的約束比深度直接 ——
+      # 深度給的是「哪裡遠哪裡近」，邊線給的是「線在哪裡」。
+      def weights_for(fidelity)
+        f = clamp01(fidelity)
+        { edge: (0.35 + 0.65 * f).round(3), depth: (0.15 + 0.50 * f).round(3) }
+      end
+
+      # fidelity 也要調 denoise，不能只調 ControlNet 權重。
+      #
+      # 實測發現的問題：denoise 固定 0.65 配上高權重時，模型幾乎沒有發揮空間，
+      # 產出看起來像「SketchUp 截圖加了點材質」而不是算圖結果。
+      # 使用者拉低 fidelity 想要「更有創意」時，只放鬆控制圖是不夠的 ——
+      # denoise 決定模型能重畫多少，那才是創意的來源。
+      #
+      # 0.0（Creative）→ 0.85：大幅重畫，只留大致構圖
+      # 1.0（Faithful） → 0.55：貼著原圖走
+      def denoise_for(fidelity)
+        (0.85 - 0.30 * clamp01(fidelity)).round(3)
+      end
+
+      def clamp01(v)
+        [[v.to_f, 0.0].max, 1.0].min
+      end
+
+      PRESET_PROMPTS = {
+        'exterior' => 'architectural photography of the building, natural daylight, ' \
+                      'clear sky, professional real estate photo, sharp focus',
+        'interior' => 'interior architectural photography, soft natural light from windows, ' \
+                      'professional real estate photo, sharp focus',
+        'dusk'     => 'architectural photography at dusk, warm interior lights, ' \
+                      'blue hour sky, professional real estate photo, sharp focus'
+      }.freeze
+
+      NEGATIVE = 'blurry, distorted geometry, extra windows, warped walls, ' \
+                 'text, watermark, cartoon, illustration'
+
+      def submit(request, on_status:, on_done:, on_error:)
+        unless available?
+          return on_error.call(Errors::Base.new(
+            "找不到本機生成環境（#{python_bin}）。請先建立 .venv-gen 並執行 tools/download_models.py",
+            code: 'GEN-01'
+          ))
+        end
+
+        assets = request[:assets] || request['assets'] || {}
+        beauty = assets[:beauty] || assets['beauty']
+        unless beauty && File.exist?(beauty.to_s)
+          return on_error.call(Errors::Base.new('缺少 beauty pass，無法生成', code: 'GEN-02'))
+        end
+
+        job_dir = File.join(Sketchup.temp_dir, "architech_gen_#{Time.now.to_i}")
+        Dir.mkdir(job_dir) unless File.directory?(job_dir)
+
+        plan     = request[:plan] || {}
+        fidelity = request[:fidelity] || 0.6
+        preset   = (request[:preset] || 'exterior').to_s
+        prompt   = [request[:prompt].to_s.strip, PRESET_PROMPTS[preset]].reject(&:empty?).join(', ')
+
+        controls = {}
+        %i[edge depth].each do |k|
+          p = assets[k] || assets[k.to_s]
+          controls[k] = p.to_s if p && File.exist?(p.to_s)
+        end
+
+        spec = {
+          prompt: prompt,
+          negative_prompt: NEGATIVE,
+          init_image: beauty.to_s,
+          controls: controls,
+          weights: weights_for(fidelity),
+          # 生成解析度受本機記憶體限制，與擷取的 1024 不同 ——
+          # 三個 pass 一起降，像素對齊仍然成立。
+          width: 640, height: 640,
+          seed: request[:seed] || rand(1 << 31),
+          steps: 30, cfg: 6.0, denoise: denoise_for(fidelity),
+          output: File.join(job_dir, 'result.png'),
+          status: File.join(job_dir, 'status.json')
+        }
+
+        spec_path = File.join(job_dir, 'job.json')
+        File.write(spec_path, JSON.generate(spec))
+
+        # 用 shell 的 & 把行程丟到背景，system 立刻返回。
+        # 不用 Process.spawn 是因為它在 SketchUp 內的行為未經驗證，
+        # 而 shell 背景化是最保守可靠的做法。
+        log = File.join(job_dir, 'run.log')
+        cmd = "cd #{sh(repo_root)} && PYTORCH_ENABLE_MPS_FALLBACK=1 " \
+              "#{sh(python_bin)} -m eval.generate_one #{sh(spec_path)} " \
+              "> #{sh(log)} 2>&1 &"
+        system(cmd)
+
+        on_status.call(state: 'running', label: '啟動本機生成…')
+        poll(spec[:status], spec[:output], log, Time.now, on_status, on_done, on_error)
+        nil
+      end
+
+      def poll(status_path, output_path, log_path, started_at, on_status, on_done, on_error)
+        timer = ::UI.start_timer(POLL_SECONDS, true) do
+          begin
+            elapsed = Time.now - started_at
+
+            if elapsed > TIMEOUT_SECONDS
+              ::UI.stop_timer(timer)
+              next on_error.call(Errors::Timeout.new("本機生成逾時（#{TIMEOUT_SECONDS}s）"))
+            end
+
+            st = read_status(status_path)
+            unless st
+              # 狀態檔還沒出現，或正好讀到寫到一半 —— 都當作「還沒好」。
+              on_status.call(state: 'running', label: '準備中…',
+                             elapsed_ms: (elapsed * 1000).round)
+              next
+            end
+
+            case st['state']
+            when 'succeeded'
+              ::UI.stop_timer(timer)
+              on_done.call('id' => File.basename(File.dirname(status_path)),
+                           'status' => 'succeeded',
+                           'result_url' => "file://#{st['result']}",
+                           'result_path' => st['result'],
+                           'latency_ms' => st['latency_ms'],
+                           'device' => st['device'])
+            when 'failed'
+              ::UI.stop_timer(timer)
+              detail = st['traceback'] || tail(log_path)
+              on_error.call(Errors::Base.new(st['label'] || '生成失敗',
+                                             code: 'GEN-10', detail: { trace: detail }))
+            else
+              on_status.call(state: 'running',
+                             label: st['label'] || '生成中…',
+                             elapsed_ms: (elapsed * 1000).round)
+            end
+          rescue StandardError => e
+            ::UI.stop_timer(timer)
+            on_error.call(Errors::Base.new("輪詢失敗：#{e.message}", code: 'GEN-11'))
+          end
+        end
+      end
+
+      def read_status(path)
+        return nil unless File.exist?(path)
+        JSON.parse(File.read(path))
+      rescue JSON::ParserError, Errno::ENOENT
+        nil # 讀到寫到一半的檔案，下一輪再試
+      end
+
+      def tail(path, lines = 20)
+        return nil unless File.exist?(path)
+        File.readlines(path).last(lines).join
+      rescue StandardError
+        nil
+      end
+
+      # 本機生成沒有雲端 job 可以取消。停止輪詢由 bridge 負責，
+      # 已經啟動的 Python 行程會自己跑完 —— 那是本機資源，不計費。
+      def cancel(_job_id)
+        false
+      end
+
+      def sh(str)
+        "'" + str.to_s.gsub("'", "'\\\\''") + "'"
+      end
+    end
+  end
+end

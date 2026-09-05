@@ -2,7 +2,7 @@
 
 module ArchitechRender
   module Net
-    # 用 UI.start_timer 做退避輪詢。
+    # 用 ::UI.start_timer 做退避輪詢。
     #
     # SketchUp 沒有背景執行緒，這是做非同步等待的標準手法。
     #
@@ -32,7 +32,7 @@ module ArchitechRender
 
       def stop
         @stopped = true
-        UI.stop_timer(@timer) if @timer
+        ::UI.stop_timer(@timer) if @timer
         @timer = nil
       end
 
@@ -53,7 +53,7 @@ module ArchitechRender
           return
         end
 
-        @timer = UI.start_timer(interval, false) do
+        @timer = ::UI.start_timer(interval, false) do
           @tick += 1
           poll_once
         end

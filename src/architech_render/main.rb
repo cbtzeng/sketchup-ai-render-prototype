@@ -23,6 +23,7 @@ module ArchitechRender
     architech_render/net/poller
     architech_render/jobs/local_index
     architech_render/net/cloud_backend
+    architech_render/net/local_backend
     architech_render/config
     architech_render/ui/bridge
     architech_render/ui/dialog

@@ -80,7 +80,7 @@ module ArchitechRender
 
           # Sketchup::Http 沒有逾時設定，所以自己計時。
           # 注意 timer 觸發時要先確認請求還沒結束，否則會 cancel 一個已完成的請求。
-          timer = UI.start_timer(timeout, false) do
+          timer = ::UI.start_timer(timeout, false) do
             next if finished
             timed_out = true
             begin
@@ -94,7 +94,7 @@ module ArchitechRender
           req.start do |_request, response|
             next if timed_out
             finished = true
-            UI.stop_timer(timer)
+            ::UI.stop_timer(timer)
             handle(response, url) { |err, res| yield(err, res) }
           end
 
@@ -129,7 +129,7 @@ module ArchitechRender
       # ⚠️ net/http 是**同步**的，會凍結 SketchUp。這裡不開執行緒
       # （SketchUp 的 Ruby API 不保證 thread-safe），所以只用在
       # 「已知很快」或「Sketchup::Http 不可用」的情況。
-      # 若最終要靠這條路徑做上傳，必須改成分塊 + UI.start_timer 讓出主執行緒。
+      # 若最終要靠這條路徑做上傳，必須改成分塊 + ::UI.start_timer 讓出主執行緒。
       # ----------------------------------------------------------------------
       module NetHttpBackend
         def self.request(method, url, headers, body, timeout)
