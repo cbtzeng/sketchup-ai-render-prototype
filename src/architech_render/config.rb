@@ -37,6 +37,24 @@ module ArchitechRender
     MAX_LONG_EDGE     = 1536   # 與 spec 4.2、Capture::Alignment::MAX_EDGE 一致
     REQUEST_TIMEOUT   = 30     # 秒
 
+    # 選擇並注入生成後端。
+    #
+    # 這個方法存在的理由：先前選擇邏輯直接寫在 main.rb 裡，而測試「重現」了
+    # 同一段邏輯而不是呼叫它。結果 main.rb 的那一行改寫失敗（字串替換靜默 no-op），
+    # 測試卻依然全綠 —— 因為測試驗的是自己那份複製品。
+    # 使用者按 Render 才發現外掛還在打未部署的雲端。
+    #
+    # **測試要驗的是正式環境會跑的那一段程式碼，不是它的複製品。**
+    def self.select_backend!
+      backend = if Net::LocalBackend.available?
+                  Net::LocalBackend
+                else
+                  Net::CloudBackend
+                end
+      UI::Bridge.backend = backend
+      backend
+    end
+
     def self.apply!
       Net::ApiClient.base_url   = API_BASE_URL
       Net::ApiClient.auth_token = AUTH_TOKEN

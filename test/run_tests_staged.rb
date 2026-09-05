@@ -54,16 +54,17 @@ puts "\n[1] 載入模組"
 end
 step('net/cloud_backend') { quietly { load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'cloud_backend.rb') }; 'OK' }
 step('net/local_backend')  { quietly { load File.join(AR_ROOT, 'src', 'architech_render', 'net', 'local_backend.rb') }; 'OK' }
-step('config')            { quietly { load File.join(AR_ROOT, 'src', 'architech_render', 'config.rb') }; 'OK' }
-step('套用 config')        { ArchitechRender::Config.apply!; ArchitechRender::Config.summary[:http_backend] }
+
 # 重現 main.rb 的選擇邏輯，而不是硬塞一個 backend。
 # 先前這裡寫死 CloudBackend，導致下方「Bridge 注入的是可用的後端」
 # 驗的是測試自己剛設的值 —— 測試在對自己說謊，正式環境用哪個完全沒被驗到。
-step('選擇 backend（同 main.rb）') do
-  b = ArchitechRender::Net::LocalBackend.available? ?
-        ArchitechRender::Net::LocalBackend : ArchitechRender::Net::CloudBackend
-  ArchitechRender::UI::Bridge.backend = b
-  b.name.split('::').last
+step('config')            { quietly { load File.join(AR_ROOT, 'src', 'architech_render', 'config.rb') }; 'OK' }
+step('套用 config 設定')    { ArchitechRender::Config.apply!; ArchitechRender::Config.summary[:http_backend] }
+
+# 呼叫正式環境用的那個方法本身，不是重現它的邏輯。
+# 先前這裡複製了一份選擇邏輯，導致 main.rb 的對應那行改寫失敗時測試依然全綠。
+step('Config.select_backend!（正式環境用的同一個方法）') do
+  ArchitechRender::Config.select_backend!.name.split('::').last
 end
 
 M  = Sketchup.active_model

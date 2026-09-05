@@ -24,20 +24,22 @@ module ArchitechRender
     architech_render/jobs/local_index
     architech_render/net/cloud_backend
     architech_render/net/local_backend
-    architech_render/config
     architech_render/ui/bridge
     architech_render/ui/dialog
+    architech_render/config
   ].freeze
 
   FILES.each { |f| require File.join(ROOT, "#{f}.rb") }
 
   Config.apply!
 
-  # 明確注入雲端後端。
-  # bridge 刻意不用 defined? 偵測 net/ —— 它要求呼叫端明確注入，
-  # 這樣介面不合會在載入期就爆，而不是 render 跑到一半才炸。
-  # 注意：這裡的 UI 是 ArchitechRender::UI，不是 SketchUp 的頂層 ::UI。
-  UI::Bridge.backend = Net::CloudBackend
+  # 選擇並注入生成後端。邏輯在 Config.select_backend! ——
+  # 那是唯一真實來源，測試呼叫的是同一個方法而不是複製一份。
+  #
+  # 優先本機生成（已在這台機器驗證可用），找不到 .venv-gen 才退回雲端。
+  # bridge 刻意要求明確注入而非自己 defined? 偵測：
+  # 介面不合會在載入期就爆，不是 render 跑到一半才炸。
+  Config.select_backend!
 
   UI::Dialog.install_menu!
 end
