@@ -47,28 +47,34 @@ module ArchitechRender
         File.executable?(python_bin)
       end
 
-      # fidelity 滑桿（0..1）映射到 ControlNet 權重。
+      # fidelity 滑桿（0..1）→ ControlNet 權重。
       #
       # 只給使用者一個旋鈕是刻意的（spec 2.1）：兩個獨立權重會讓人不知道從何調起。
       # edge 的權重範圍比 depth 高，因為邊線對結構的約束比深度直接 ——
       # 深度給的是「哪裡遠哪裡近」，邊線給的是「線在哪裡」。
+      #
+      # 下限刻意不低於 0.55：實測 0.48 時建築量體就整個跑掉了
+      # （12 個窗變成完全不同的形狀）。低於這個值就不再是「這棟建築的算圖」，
+      # 而是「用這張圖當靈感重新生成」—— 那不是渲染外掛該提供的東西。
       def weights_for(fidelity)
         f = clamp01(fidelity)
-        { edge: (0.35 + 0.65 * f).round(3), depth: (0.15 + 0.50 * f).round(3) }
+        { edge: (0.55 + 0.45 * f).round(3), depth: (0.30 + 0.35 * f).round(3) }
       end
 
-      # fidelity 也要調 denoise，不能只調 ControlNet 權重。
+      # denoise **不隨 fidelity 變動**，固定在偏高的值。
       #
-      # 實測發現的問題：denoise 固定 0.65 配上高權重時，模型幾乎沒有發揮空間，
-      # 產出看起來像「SketchUp 截圖加了點材質」而不是算圖結果。
-      # 使用者拉低 fidelity 想要「更有創意」時，只放鬆控制圖是不夠的 ——
-      # denoise 決定模型能重畫多少，那才是創意的來源。
+      # 這一版是實測後修正的。第一版讓 denoise 隨 fidelity 反向變動
+      # （低保真 = 高 denoise），結果兩端都不堪用：
+      #   高保真：denoise 0.65 + 高權重 → 產出看起來像 SketchUp 截圖加了點材質
+      #   低保真：denoise 0.79 + 低權重 → 像照片，但建築結構整個跑掉
+      # 中間那個「照片般但結構正確」的區域反而到不了。
       #
-      # 0.0（Creative）→ 0.85：大幅重畫，只留大致構圖
-      # 1.0（Faithful） → 0.55：貼著原圖走
-      def denoise_for(fidelity)
-        (0.85 - 0.30 * clamp01(fidelity)).round(3)
-      end
+      # 原因是我把兩個**獨立的軸**綁在一起了。ControlNet 的整個意義就是：
+      # denoise 開高讓模型自由重畫材質與光影，同時由控制圖把幾何按住。
+      # 讓它們同進同退，等於把 ControlNet 的好處抵銷掉。
+      #
+      # 所以：denoise 固定高（重畫材質光影），fidelity 只管控制圖權重（按住幾何）。
+      DENOISE = 0.75
 
       def clamp01(v)
         [[v.to_f, 0.0].max, 1.0].min
@@ -124,7 +130,7 @@ module ArchitechRender
           # 三個 pass 一起降，像素對齊仍然成立。
           width: 640, height: 640,
           seed: request[:seed] || rand(1 << 31),
-          steps: 30, cfg: 6.0, denoise: denoise_for(fidelity),
+          steps: 30, cfg: 7.5, denoise: DENOISE,
           output: File.join(job_dir, 'result.png'),
           status: File.join(job_dir, 'status.json')
         }

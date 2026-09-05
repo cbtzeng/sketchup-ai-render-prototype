@@ -265,12 +265,13 @@ check.call("fidelity 映射到 ControlNet 權重") do
   "0.0→#{lo.inspect}  1.0→#{hi.inspect}"
 end
 
-check.call("fidelity 也要調 denoise（低保真=更有創意）") do
+check.call("denoise 不隨 fidelity 變動（兩個獨立的軸）") do
   lb = ArchitechRender::Net::LocalBackend
-  creative = lb.denoise_for(0.0)
-  faithful = lb.denoise_for(1.0)
-  raise "低保真的 denoise 應該較高：#{creative} vs #{faithful}" unless creative > faithful
-  "Creative #{creative} → Faithful #{faithful}"
+  raise 'denoise 應為固定值' unless lb.const_defined?(:DENOISE)
+  # 下限不得低於 0.55 —— 實測 0.48 時建築量體整個跑掉
+  lo = lb.weights_for(0.0)[:edge]
+  raise "edge 權重下限太低（#{lo}），結構會跑掉" if lo < 0.55
+  "denoise 固定 #{lb::DENOISE}，edge 權重 #{lo}..#{lb.weights_for(1.0)[:edge]}"
 end
 
 check.call("Bridge 注入的是可用的後端（不是 stub）") do
