@@ -153,3 +153,48 @@ def write_png_gray(path, gray: np.ndarray, filter_type: int = 0) -> None:
     gray = np.asarray(gray, dtype=np.uint8)
     assert gray.ndim == 2, "需要 (H, W)"
     write_png_rgb(path, np.repeat(gray[:, :, None], 3, axis=2), filter_type)
+
+
+# ---------------------------------------------------------------------------
+# 縮放
+#
+# 為什麼需要：SketchUp 擷取的控制圖是 1024²，但生成受記憶體限制跑 640²。
+# 比對時必須把 GT 降到預測圖的尺寸，**不能把預測圖放大** ——
+# 放大不會增加資訊，只會讓邊線變粗而虛報 recall。
+#
+# 兩種降採樣方式不能混用：
+#   邊圖是二值的稀疏結構，用平均會讓細線淡到低於門檻而整條消失，
+#   所以用「區塊取最大」保住線。
+#   深度圖是連續場，用區塊平均才不會因為取樣點落在錯的像素而跳動。
+# ---------------------------------------------------------------------------
+
+def _block_edges(src_len: int, dst_len: int) -> list[tuple[int, int]]:
+    """把來源軸切成 dst_len 段，回傳每段的 [起, 迄)。"""
+    bounds = [round(i * src_len / dst_len) for i in range(dst_len + 1)]
+    return [(bounds[i], max(bounds[i + 1], bounds[i] + 1)) for i in range(dst_len)]
+
+
+def downsample_max(arr: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """區塊取最大值。用於二值邊圖 —— 只要區塊內有邊，結果就有邊。"""
+    h, w = shape
+    rows = _block_edges(arr.shape[0], h)
+    cols = _block_edges(arr.shape[1], w)
+    out = np.zeros((h, w), dtype=arr.dtype)
+    for i, (r0, r1) in enumerate(rows):
+        band = arr[r0:r1]
+        for j, (c0, c1) in enumerate(cols):
+            out[i, j] = band[:, c0:c1].max()
+    return out
+
+
+def downsample_mean(arr: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """區塊取平均。用於深度等連續場。"""
+    h, w = shape
+    rows = _block_edges(arr.shape[0], h)
+    cols = _block_edges(arr.shape[1], w)
+    out = np.zeros((h, w), dtype=np.float64)
+    for i, (r0, r1) in enumerate(rows):
+        band = arr[r0:r1].astype(np.float64)
+        for j, (c0, c1) in enumerate(cols):
+            out[i, j] = band[:, c0:c1].mean()
+    return out

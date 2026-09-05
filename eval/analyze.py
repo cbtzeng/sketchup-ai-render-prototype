@@ -27,7 +27,7 @@ import numpy as np
 
 from .metrics.canny import CannyParams, run_canny
 from .metrics.edge_f import match_edges
-from .metrics.io import read_edge_map, read_grayscale
+from .metrics.io import downsample_max, read_edge_map, read_grayscale
 from .stats import paired_bootstrap
 
 ROOT = Path(__file__).resolve().parent
@@ -48,6 +48,14 @@ def edge_f_for(generated: Path, gt_edge: Path, params: CannyParams) -> float:
     pred = run_canny(gen_grey, params).edges
     # GT 邊圖是白底黑線（SketchUp 的 hidden-line pass），所以黑色像素才是邊
     gt = read_edge_map(str(gt_edge), threshold=128.0, dark_is_edge=True)
+
+    # 擷取是 1024²、生成受記憶體限制跑 640²，尺寸不同。
+    # 把 GT **降**到預測圖的尺寸，而不是把預測圖放大 ——
+    # 放大不增加資訊，只會讓邊線變粗而虛報 recall。
+    # 二值邊圖用區塊取最大，平均會讓細線淡到低於門檻而整條消失。
+    if gt.shape != pred.shape:
+        gt = downsample_max(gt.astype(np.uint8), pred.shape).astype(bool)
+
     counts = match_edges(pred, gt, tolerance=2)
     return counts.f1
 
