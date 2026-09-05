@@ -82,3 +82,10 @@ docs/journal/**/[0-9]*.md
 ---
 ## 附錄三：評估結果
 eval/report.md
+
+[profile:collaboration-brief]
+title: 協作報告（精簡版）
+subtitle: 與 AI 共同開發 SketchUp 渲染外掛 — 關鍵對話與判斷分歧
+author: cbtzeng
+
+docs/COLLABORATION_REPORT_BRIEF.md
