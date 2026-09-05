@@ -14,9 +14,13 @@
 AR_ROOT = File.expand_path('../..', File.dirname(__FILE__)) unless defined?(AR_ROOT)
 EVAL_CAPTURES = File.join(AR_ROOT, 'eval', 'captures') unless defined?(EVAL_CAPTURES)
 
-%w[options_keys view_state alignment passes session].each do |f|
-  k = "ArchitechRender::Capture::#{f.split('_').map(&:capitalize).join}"
-  load File.join(AR_ROOT, 'src', 'architech_render', 'capture', "#{f}.rb")
+# 外掛啟動時已從 Plugins 的符號連結載過這些檔案。從 repo 路徑再 load 一次，
+# Ruby 會視為不同檔案而重複定義每一個常數（幾十行警告）。
+# 已經在就直接用 —— 符號連結指向同一份原始碼，內容必然一致。
+unless defined?(ArchitechRender::Capture::Session)
+  %w[options_keys view_state alignment passes session].each do |f|
+    load File.join(AR_ROOT, 'src', 'architech_render', 'capture', "#{f}.rb")
+  end
 end
 
 module ArchitechScene
@@ -25,26 +29,46 @@ module ArchitechScene
   SE = ArchitechRender::Capture::Session
 
   # 兩個相機角度：一點透視與斜角。刻意不同，讓兩個 shot 不是同一張圖。
+  # 相機距離的算法：垂直 FOV 35 度、輸出 1:1，所以在距離 d 時可見高度約
+  # 2*d*tan(17.5°) ≈ 0.63d。量體 16m 寬 9m 高，第一版放 26m 剛好被facade塞滿，
+  # 變成「一面窗牆」而不是建築 —— 看不到屋頂、側面與側翼，深度圖也幾乎是平的。
+  # 拉到 48m 讓可見高度約 30m，量體佔約三分之一，周圍留白給地面與天空。
   CAMERAS = [
-    { name: 'cam1', eye: [0, -26, 6], target: [0, 0, 4] },
-    { name: 'cam2', eye: [-20, -18, 9], target: [2, 0, 4] }
+    { name: 'cam1', eye: [6, -48, 16],  target: [1, 0, 4] },   # 略偏一點透視
+    { name: 'cam2', eye: [-34, -34, 22], target: [3, 0, 4] }   # 斜角，看得到側翼
   ].freeze
+
+  # 材質是必要的，不是裝飾。沒有材質時 beauty pass 就是白牆黑線，
+  # 跟 edge pass 幾乎一樣 —— A 組（純 img2img）就沒有「顏色可以漂」，
+  # 測不出控制圖到底救回了什麼。
+  def self.material(model, name, rgb)
+    m = model.materials[name] || model.materials.add(name)
+    m.color = Sketchup::Color.new(*rgb)
+    m
+  end
 
   def self.build(model)
     ents = model.active_entities
     grp  = ents.add_group
     g    = grp.entities
 
+    mat_ground = material(model, 'ArchGround', [122, 126, 118])
+    mat_wall   = material(model, 'ArchWall',   [196, 188, 174])
+    mat_glass  = material(model, 'ArchGlass',  [92, 116, 132])
+    mat_wing   = material(model, 'ArchWing',   [150, 120, 100])
+
     # 地面
     ground = g.add_face([-40 * M, -40 * M, 0], [40 * M, -40 * M, 0],
                         [40 * M, 40 * M, 0], [-40 * M, 40 * M, 0])
     ground.reverse! if ground.normal.z < 0
+    ground.material = mat_ground
 
     # 主量體
     base = g.add_face([-8 * M, -4 * M, 0], [8 * M, -4 * M, 0],
                       [8 * M, 4 * M, 0], [-8 * M, 4 * M, 0])
     base.reverse! if base.normal.z < 0
     base.pushpull(9 * M)
+    grp.material = mat_wall
 
     # 在正面挖窗 —— 開口是「結構幻覺」最容易發生的地方，
     # 也是 spec 4.3 的「開口數量幻覺率」指標要測的東西。
@@ -61,7 +85,12 @@ module ArchitechScene
           Geom::Point3d.new(x0 + w,  front_y, z0 + h),
           Geom::Point3d.new(x0,      front_y, z0 + h)
         )
-        win.pushpull(-0.35 * M) if win && win.respond_to?(:pushpull)
+        if win && win.respond_to?(:pushpull)
+          win.pushpull(-0.35 * M)
+          # 凹進去之後，原本那個面變成窗洞的底 —— 給它玻璃色，
+          # 這樣 beauty 有明顯的明暗對比，開口數量也數得出來。
+          win.material = mat_glass
+        end
       end
     end
 
@@ -70,6 +99,7 @@ module ArchitechScene
                       [15 * M, 3 * M, 0], [8 * M, 3 * M, 0])
     wing.reverse! if wing.normal.z < 0
     wing.pushpull(4 * M)
+    wing.material = mat_wing if wing.valid?
 
     grp
   end
